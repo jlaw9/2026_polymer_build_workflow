@@ -1,0 +1,164 @@
+#-------------------INITIALIZATION-------------------------
+
+units 				real
+atom_style 			full
+dimension 			3
+boundary 			p p p
+
+#---------------------VARIABLES----------------------------
+
+variable	       		Temperature equal  300
+variable	       		Pressure equal  1
+variable    			cod1 equal 9.0
+variable 			tempdamp equal 100
+variable 			pressdamp equal 1000
+variable			cod equal 9.0
+variable 			density_threshold equal 0.0005
+variable 	MassinGrams equal mass(all)/6.02e23
+variable 	VolumeCubicCentimeter equal vol*1.0e-24
+variable 	Density equal v_MassinGrams/v_VolumeCubicCentimeter
+variable	SpecificVolume equal 1.0/v_Density
+
+#--------------------FORCE FIELD---------------------------
+
+bond_style 			harmonic
+angle_style 			harmonic
+dihedral_style 			fourier
+improper_style 			cvff
+special_bonds 			lj 0.0 0.0 0.5 coul 0.0 0.0 0.8333333333 
+pair_style 			lj/cut/coul/long ${cod1} ${cod1}
+pair_modify 			mix arithmetic tail yes
+kspace_style 			pppm 1e-4
+
+#------------------SIMULATION SETTINGS---------------------
+
+read_data 00hvpZ8BmvYTui03dgdwJA.lammps
+
+neighbor        		2.0 bin
+neigh_modify    		delay 0 every 1 check yes page 1000000 one 20000
+
+timestep 				1.0
+
+thermo_style 			custom step density etotal pe ke enthalpy lx ly lz cpu temp press ebond eangle edihed eimp epair evdwl ecoul elong etail
+thermo         		1000
+thermo_modify			flush yes
+
+fix Dens_old all ave/time 1 200000 200000 v_Density file density_old.ave
+fix Dens_new all ave/time 1 100000 200000 v_Density file density_new.ave
+
+#-----------------ENSEMBLE SETUP: INITIAL EQUILIBRATION--------------
+
+#NVT at 300K
+velocity all create ${Temperature} 4928459 dist gaussian
+minimize 0.0 1.0e-8 1000 100000
+fix init_nvt all nvt temp 300 300 ${tempdamp}
+run 10000
+unfix init_nvt
+write_data data-init_nvt.data
+
+
+label loop_first
+variable i loop 100
+
+# NPT at 300K and 1 atm
+velocity all create ${Temperature} 4928459 dist gaussian
+minimize 0.0 1.0e-8 1000 100000
+fix initial_npt all npt temp 300 300 ${tempdamp} iso 1.0 1.0 ${pressdamp}
+run 5000
+
+next i
+jump SELF loop_first
+
+unfix initial_npt
+write_data data_init-500ps.data
+
+
+label loop_compress
+variable i loop 100
+
+#NPT compress
+velocity all create ${Temperature} 4928459 dist gaussian
+minimize 0.0 1.0e-8 1000 100000
+fix compress_npt all npt temp 300 300 ${tempdamp} iso 10000.0 10000.0 ${pressdamp}
+run 5000
+
+next i
+jump SELF loop_compress
+
+unfix compress_npt
+write_data data_compress-500ps.data
+
+
+label loop_nvt
+variable i loop 50
+
+#NVT 600K
+velocity all create ${Temperature} 4928459 dist gaussian
+minimize 0.0 1.0e-8 1000 100000
+fix nvt all nvt temp 600 600 ${tempdamp}
+run 5000
+
+next i
+jump SELF loop_nvt
+
+unfix nvt
+write_data data_nvt-250ps.data
+
+
+label loop_npt
+variable i loop 50
+
+#NPT 400K
+velocity all create ${Temperature} 4928459 dist gaussian
+minimize 0.0 1.0e-8 1000 100000
+fix npt all npt temp 400 400 ${tempdamp} iso 1.0 1.0 ${pressdamp}
+run 5000
+
+next i
+jump SELF loop_npt
+
+unfix npt
+write_data data_npt-250ps.data
+
+# pre-NPT at 300K and 1 atm
+velocity all create ${Temperature} 4928459 dist gaussian
+minimize 0.0 1.0e-8 1000 100000
+fix pre_npt all npt temp 300 300 ${tempdamp} iso 1.0 1.0 ${pressdamp}
+run 1000000
+
+unfix pre_npt
+write_data data_pre-npt-500ps.data
+
+label loop_last
+variable i loop 20
+
+# Get the last average density
+variable new_density equal f_Dens_new
+variable old_density equal f_Dens_old
+
+# Calculate density change
+variable density_change equal "abs(v_new_density - v_old_density)"
+
+# final NPT at 300K and 1 atm
+velocity all create ${Temperature} 4928459 dist gaussian
+minimize 0.0 1.0e-8 1000 100000
+fix final_npt all npt temp 300 300 ${tempdamp} iso 1.0 1.0 ${pressdamp}
+run 210000
+
+# Print densities and density change for debugging
+print "Old density: ${old_density}"
+print "New density: ${new_density}"
+print "Density change: ${density_change}"
+
+# Check if density change is below threshold
+if "${density_change} < ${density_threshold}" then "jump SELF break"
+
+# Continue looping if density has not stabilized
+next i
+jump SELF loop_last
+
+label break
+print "Density stabilized. Final density: ${new_density}"
+
+write_data data_final-init.data
+write_restart			restart_init.*

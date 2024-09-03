@@ -1,0 +1,30 @@
+#!/bin/bash
+
+# Define the output file
+output_file="quick-dens-analys-output.txt"
+
+# Clear the output file if it exists
+> $output_file
+
+# Loop through each directory in the current folder
+for dir in */; do
+    if [ -d "$dir" ]; then
+        cd "./$dir"
+
+        # Check if density_new.ave exists before processing
+        if [ -f "density_new.ave" ]; then
+            # Get the last value from density_new.ave
+            last_value=$(tail -n 1 density_new.ave)
+            
+            # Append the folder name and the last value to the output file
+            echo "$dir $last_value" >> "../$output_file"
+        else
+            echo "density_new.ave not found in $dir"
+        fi
+
+        # Go back to the parent directory
+        cd ../
+    fi
+done
+
+echo "Density values have been collected in $output_file"

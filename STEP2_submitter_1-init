@@ -1,0 +1,22 @@
+#!/bin/bash
+
+# Loop through each directory in the current folder
+for dir in */; do
+    if [ -d "$dir" ]; then
+        cd "./$dir"
+
+        # Check if lmp1.sh exists before submitting
+        if [ -f "lmp1.sh" ]; then
+            # Submit the lmp1.sh script
+            sbatch lmp1.sh
+        else
+            echo "lmp1.sh not found in $dir"
+        fi
+
+        # Go back to the parent directory
+        cd ../
+
+        # Wait for 2 seconds
+        sleep 2
+    fi
+done

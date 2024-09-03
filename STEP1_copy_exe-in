@@ -1,0 +1,49 @@
+#!/bin/bash
+
+# Function to check if a directory is a "final" directory (no subdirectories)
+is_final_directory() {
+    local dir="$1"
+    # If there are no subdirectories, return success
+    if [ $(find "$dir" -mindepth 1 -type d | wc -l) -eq 0 ]; then
+        return 0
+    else
+        return 1
+    fi
+}
+
+# Function to modify the 1-init.in file in the final directory
+modify_init_file() {
+    local dir="$1"
+    local init_file="$dir/1-init.in"
+    local dir_name=$(basename "$dir")
+    local data_filename="${dir_name}.lammps"
+
+    # Modify the read_data command in 1-init.in
+    sed -i "s/read_data.*/read_data ${data_filename}/" "$init_file"
+}
+
+# Function to recursively find and process final directories
+process_directories() {
+    local parent_dir="$1"
+    for dir in "$parent_dir"/*; do
+        if [ -d "$dir" ]; then
+            if is_final_directory "$dir"; then
+                # Copy files to the final directory
+                echo "Copying files to $dir"
+                cp lmp1.sh "$dir"
+                cp lmp2.sh "$dir"
+                cp 1-init.in "$dir"
+                cp 2-density.in "$dir"
+
+                # Modify the 1-init.in file
+                modify_init_file "$dir"
+            else
+                # Recursively process subdirectories
+                process_directories "$dir"
+            fi
+        fi
+    done
+}
+
+# Start processing from the current directory
+process_directories "."
