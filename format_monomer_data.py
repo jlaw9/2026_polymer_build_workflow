@@ -7,7 +7,7 @@ import warnings
 warnings.filterwarnings(action='ignore')
 
 # Stdlib
-from typing import Container, Iterable, Sequence, Optional, Union
+from typing import Any, Container, Iterable, Sequence, Optional, Union
 
 from ast import literal_eval
 from argparse import ArgumentParser, Namespace
@@ -27,6 +27,13 @@ from polymerist.polymers.monomers import specification
 
 
 # VALIDATING PATHS
+def _stringify_dict(anydict : dict[Any, Any], sep : str=', ', joiner : str='-->') -> str:
+    '''Create an inline string describing the mappping in a dict'''
+    return sep.join(
+        f'({key!s} {joiner} {value!s})'            
+            for key, value in anydict.items()
+    )
+
 def _validate_file_path(
         path : Path,
         check_missing : bool=False,
@@ -89,6 +96,7 @@ def locate_attr_cols(dataframe : pd.DataFrame, columns_to_check : dict[str, Iter
                 break
         else:
             raise IndexError(f'No matching columns for attribute "{targ_attr} were found from queries: "{col_names_to_check}"')
+    logging.info('Found valid columns name mappings:\n\t' + _stringify_dict(attr_columns))
         
     return attr_columns
 
@@ -108,8 +116,13 @@ def standardize_monomer_data(dataframe : pd.DataFrame, rxn_mapping : dict[str, s
     )
 
     # insert new columns for processed statepoint data
+    logging.info('Canonicalizing all SMILES')
     dataframe['smiles_canonical'] = dataframe['smiles_original'].map(lambda smi : parse_monomer_smiles(smi, canonicalize=True))
+    
+    logging.info('Expanding SMILES to be chemically explicit')
     dataframe['smiles_explicit' ] = dataframe['smiles_canonical'].map(lambda smi : specification.expanded_SMILES(smi, assign_map_nums=False))
+    
+    logging.info('Looking up reaction mechanism')
     dataframe['rxn_smarts'] = dataframe['mechanism'].map(rxn_mapping)
 
     statepoint_colnames = ['smiles_explicit', 'rxn_smarts'] # explicitly mark statepoint and metadata columns to simplify final parse
@@ -131,7 +144,6 @@ WRITER_FNS_BY_EXT = {
 }
 RXN_MAP_EXTS = ('.json',)
 
-
 def read_monomer_data(mdat_paths : Iterable[Path]) -> list[pd.DataFrame]:
     '''Validate and read in a series of monomer data paths
     Returns a list of dataframes, containing monomer data in the order that paths were passed'''
@@ -139,6 +151,7 @@ def read_monomer_data(mdat_paths : Iterable[Path]) -> list[pd.DataFrame]:
     for mdat_path in mdat_paths:
         _validate_file_path(mdat_path, valid_extensions=READER_FNS_BY_EXT, check_missing=True)
         reader_fn = READER_FNS_BY_EXT[mdat_path.suffix] # don't use get() here; WANT a KeyError if invalid
+        logging.info(f'Reading monomer data from {mdat_path}')
         mdat_dataframes.append(reader_fn(mdat_path))
 
     return mdat_dataframes
@@ -148,6 +161,7 @@ def read_rxn_mapping_data(rxn_mapping_path : Path) -> dict[str, str]:
     Returns a dict keyed by reaction anem whose keys are SMARTS for the corresponding functional reaction'''
     _validate_file_path(rxn_mapping_path, valid_extensions=RXN_MAP_EXTS, check_missing=True)
     with rxn_mapping_path.open('r') as rxn_map_file:
+        logging.info(f'Reading reaction data from {rxn_mapping_path}')
         return json.load(rxn_map_file)
     
 def sanitize_monomer_data_paths(args : Namespace) -> list[Path]:
@@ -170,21 +184,26 @@ def format_merged(args : Namespace) -> None:
     output_path = args.output_dir / args.output_file
     _validate_file_path(output_path, check_missing=False, check_already_exists=not args.allow_overwrites, valid_extensions=WRITER_FNS_BY_EXT)
 
+    rxn_mapping = read_rxn_mapping_data(args.rxn_mapping_path)
     monomer_paths = sanitize_monomer_data_paths(args)
     monomer_dfs = read_monomer_data(monomer_paths)
-    rxn_mapping = read_rxn_mapping_data(args.rxn_mapping_path)
-
     for df in monomer_dfs:
         standardize_monomer_data(df, rxn_mapping=rxn_mapping)
+
     master_df = pd.concat(monomer_dfs) # columns we care about should be aligned now that the dataframes are standardized
     if args.keep_n is not None:
+        keep_n = min(args.keep_n, len(master_df)) # clamp number of sample to the size of the dataset
         if args.random:
-            master_df = master_df.sample(args.keep_n) # randomly sample N records
+            logging.info(f'Sampling a random {keep_n} records from merged dataset')
+            master_df = master_df.sample(keep_n) # randomly sample N records
         else:
-            master_df = master_df.head(min(args.keep_n, len(master_df))) # sample the first N records, unless N exceed the size of the database
+            logging.info(f'Sampling the first {keep_n} records from merged dataset')
+            master_df = master_df.head(keep_n) # sample the first N records, unless N exceed the size of the database
     
     writer_fn = WRITER_FNS_BY_EXT[output_path.suffix]
+    logging.info(f'Writing monomer data to {output_path}...')
     writer_fn(master_df, output_path) # need to call with master_df in place of "self" argument
+    logging.info(f'Write to {output_path} complete')
 
 def format_sequential(args : Namespace) -> None:
     '''
@@ -198,7 +217,7 @@ def format_sequential(args : Namespace) -> None:
     
     # determine output file paths - argparse check ensures the postfix and new_names modes will have mutually exclusive options
     if args.new_names is None: 
-        # executed when using postfix
+        logging.info('Determining output file names via the "postfix" directive')
         output_paths : list[Path] = []
         for input_path in monomer_paths:
             output_path = args.output_dir / f'{input_path.stem}_{args.postfix}{input_path.suffix}'
@@ -206,7 +225,7 @@ def format_sequential(args : Namespace) -> None:
             output_paths.append(output_path)
 
     elif args.postfix is None: 
-        # executed when using unique path names
+        logging.info('Determining output file names via the "new_names" directive')
         if (num_names := len(args.new_names)) != (num_inputs := len(monomer_paths)):
             raise IndexError(
                 'If providing output names, must provide exactly as many names as monomer input files\n' \
@@ -220,14 +239,16 @@ def format_sequential(args : Namespace) -> None:
             output_paths.append(output_path)
 
     # read, reformat, and write out data
-    monomer_dfs = read_monomer_data(monomer_paths)
     rxn_mapping = read_rxn_mapping_data(args.rxn_mapping_path)
+    monomer_dfs = read_monomer_data(monomer_paths)
 
     for monomer_df, output_path in zip(monomer_dfs, output_paths):
         standardize_monomer_data(monomer_df, rxn_mapping=rxn_mapping)
         # NOTE: don't need to validate output, as this was done in the output path compile step prior
         writer_fn = WRITER_FNS_BY_EXT[output_path.suffix]
+        logging.info(f'Writing monomer data to {output_path}...')
         writer_fn(monomer_df, output_path) # need to call with master_df in place of "self" argument
+        logging.info(f'Write to {output_path} complete')
 
 
 # ARGUMENT PARSING AND DISPATCH
