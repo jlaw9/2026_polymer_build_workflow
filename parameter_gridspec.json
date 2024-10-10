@@ -1,0 +1,26 @@
+{
+    "DOP": [
+        3
+    ],
+    "n_atoms_max": [
+        20000
+    ],
+    "pcharge_method": [
+        "Espaloma-AM1-BCC"
+    ],
+    "minimize_oligomer": [
+        true
+    ],
+    "force_field": [
+        "openff_unconstrained-2.0.0.offxml"
+    ],
+    "use_switching_function": [
+        false
+    ],
+    "nonbonded_cutoff_nm": [
+        0.0
+    ],
+    "box_padding_nm": [
+        0.9
+    ]
+}
