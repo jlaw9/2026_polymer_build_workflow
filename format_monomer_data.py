@@ -127,7 +127,7 @@ def standardize_monomer_data(dataframe : pd.DataFrame, rxn_mapping : dict[str, s
 
     statepoint_colnames = ['smiles_explicit', 'rxn_smarts'] # explicitly mark statepoint and metadata columns to simplify final parse
     dataframe.rename(
-        columns=lambda colname : f'{colname}<S>' if colname in statepoint_colnames else f'{colname}<M>',
+        columns=lambda colname : f'{colname}<statedata>' if colname in statepoint_colnames else f'{colname}<metadata>',
         inplace=True # perform rename in-place to avoid allocating memory for new (potentially large) dataframe 
     ) 
 
