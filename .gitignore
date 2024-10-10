@@ -12,6 +12,7 @@ amine_symmetry.ipynb
 # testing dirs
 sdf_testing/*
 energy_tables/*
+polyid_test/*
 
 # stray files
 **/__pycache__/*
