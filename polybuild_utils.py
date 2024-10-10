@@ -1,6 +1,7 @@
 '''Collection of functions useful throughout the polymer building process'''
 
-from typing import Optional
+from typing import Optional, Union
+from collections import Counter
 
 import re
 import numpy as np
@@ -21,10 +22,15 @@ from rich.console import Group
 from rdkit import Chem
 from openmm import Integrator, Context
 
+# OpenFF
+from openff.toolkit import Molecule, Topology
 from openff.interchange import Interchange
 from openff.interchange.components.mdconfig import MDConfig
 from openff.interchange.interop.openmm._positions import to_openmm_positions
 
+from openff.units.elements import SYMBOLS
+
+# Polymerist
 from polymerist.maths.lattices.integral import CubicIntegerLattice
 from polymerist.polymers.monomers import specification, MonomerGroup
 from polymerist.rdutils.reactions.reactors import PolymerizationReactor
@@ -100,7 +106,32 @@ def generate_smarts_fragments(reactants_dict : dict[str, Chem.Mol], reactor : Po
 
 
 # TOPOLOGY PACKING
-HILL_REGEX = re.compile(r'([A-Z][a-z]?)[0-9]*?') # break apart hill formula into just unique elements (one capital letter, one or no lowercase letters, any (including none) digits)
+HILL_REGEX = re.compile('(?P<element>[A-Z][a-z]?)(?P<count>[0-9]*)') # break apart hill formula into just unique elements (one capital letter, one or no lowercase letters, any (including none) digits)
+def elem_counts_hill(offmol : Molecule) -> dict[str, int]:
+    '''Extract unique elements and their counts from a Molecule object's Hill formula'''
+    elem_counts = {}
+    for match in re.finditer(HILL_REGEX, offmol.to_hill_formula()):
+        match_groups = match.groupdict()
+        if match_groups['count'] == '':
+            match_groups['count'] = '1'
+        elem_counts[match_groups['element']] = int(match_groups['count'])
+    return elem_counts
+
+def elem_counts(offobj : Union[Molecule, Topology], from_hill_formula : bool=False) -> dict[str, int]:
+    '''Takes an penFF Molecule or Topology object and returns a dict keyed by
+    unique element symbols whose values count the number of occurrences of that element'''
+
+    if from_hill_formula:
+        if isinstance(offobj, Topology):
+            raise ValueError(f'Cannot parse Hill formula from {Topology!s} object which does not implement to_hill_formula()')
+        # logging.warn('Extracting atom counts from Hill formula, rather than direct count')
+        return elem_counts_hill(offobj)
+    else:
+        elem_counts = Counter(
+            SYMBOLS[atom.atomic_number]
+                for atom in offobj.atoms # this works because both Molecule and Topology implement the "atoms" iterator
+        )
+        return dict(elem_counts)
 
 def generate_uniform_subpopulated_lattice(max_num_atoms : int, num_atoms_in_mol : int, dimension : int=3) -> CubicIntegerLattice:
     '''Create an integer lattice which accomodates a number of sites while minimizing the size of consecutive voids between empty sites'''
