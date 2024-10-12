@@ -1,14 +1,15 @@
 '''Collection of functions useful throughout the polymer building process'''
 
-from typing import Optional, Union
-from typing import Any, Generator, Iterable
+from typing import Any, Generator, Iterable, Optional, TypeAlias, Union
+StringMap : TypeAlias = dict[str, str]
 
 from collections import Counter
 from itertools import product as cartesian_product
+from pathlib import Path
 
 import re
 import numpy as np
-from pathlib import Path
+import pandas as pd
 
 from rich.progress import Progress
 from rich.progress import (
@@ -131,6 +132,26 @@ def generate_smarts_fragments(reactants_dict : dict[str, Chem.Mol], reactor : Po
             monogrp.monomers[f'{assoc_group_name}_{affix}'] = [spec_smarts]
 
     return monogrp
+
+# DATAFILE PARSING
+def parse_field_names_and_roles(dataframe : pd.DataFrame) -> tuple[StringMap, StringMap]:
+    '''Extract the field (column) names and data role metadata
+    Returns two dicts mapping from column names as-they-are to names and data roles, respectively'''
+
+    HEADER_ROLE_RE = re.compile('(?P<field_name>.*?)<(?P<field_role>.*?)>') # role is delimited by chevrons
+
+    colname_tag_free  : StringMap = {}
+    colname_data_role : StringMap = {}
+    for colname in dataframe.columns:
+        matches = re.match(HEADER_ROLE_RE, colname)
+        assert matches is not None
+
+        match_fields : StringMap = matches.groupdict()
+        colname_tag_free[colname] = match_fields['field_name']
+        colname_data_role[colname] = match_fields['field_role']
+        
+    return colname_tag_free, colname_data_role
+
 
 # TOPOLOGY PACKING
 HILL_REGEX = re.compile('(?P<element>[A-Z][a-z]?)(?P<count>[0-9]*)') # break apart hill formula into just unique elements (one capital letter, one or no lowercase letters, any (including none) digits)
