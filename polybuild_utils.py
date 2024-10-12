@@ -1,7 +1,10 @@
 '''Collection of functions useful throughout the polymer building process'''
 
 from typing import Optional, Union
+from typing import Any, Generator, Iterable
+
 from collections import Counter
+from itertools import product as cartesian_product
 
 import re
 import numpy as np
@@ -31,6 +34,7 @@ from openff.interchange.interop.openmm._positions import to_openmm_positions
 from openff.units.elements import SYMBOLS
 
 # Polymerist
+from polymerist.genutils.decorators.functional import allow_string_paths
 from polymerist.maths.lattices.integral import CubicIntegerLattice
 from polymerist.polymers.monomers import specification, MonomerGroup
 from polymerist.rdutils.reactions.reactors import PolymerizationReactor
@@ -84,6 +88,30 @@ def initialize_polymer_progress(num_compounds : int) -> tuple[Group, tuple[int, 
     return group, (status_id, curr_compound_id, comp_progress_id)
 
 
+# GENERAL-PURPOSE
+@allow_string_paths
+def is_empty(filepath : Path) -> bool:
+    '''Check whether a given file is empty'''
+    if filepath.is_dir():
+        raise IsADirectoryError(f'filepath must point to file, not to directory "{filepath}"')
+    # NOTE: not checking file existence here, as calling stat() will already do this check (and raise appropriate error)
+
+    return filepath.stat().st_size == 0
+
+def cartesian_grid(param_options : dict[str, Iterable[Any]]) -> Generator[dict[str, Any], None, None]:
+    '''
+    Takes a dict keyed by parameter names whose values contain
+    possible values for each respective parameter
+    
+    Exhaustively generates dicts (keyed by the same parameter names) containing every
+    unique combination of those parameter values, with exactly one value for each key
+    '''
+    for param_point in cartesian_product(*param_options.values()):
+        yield {
+            param_name : param_value
+                for param_name, param_value in zip(param_options.keys(), param_point)
+        }
+
 # POLYMERIZATION
 def generate_smarts_fragments(reactants_dict : dict[str, Chem.Mol], reactor : PolymerizationReactor) -> MonomerGroup:
     '''Takes a labelled dict of reactant Mols and a PolymerizationReactor object with predefined rxn mechanism
@@ -103,7 +131,6 @@ def generate_smarts_fragments(reactants_dict : dict[str, Chem.Mol], reactor : Po
             monogrp.monomers[f'{assoc_group_name}_{affix}'] = [spec_smarts]
 
     return monogrp
-
 
 # TOPOLOGY PACKING
 HILL_REGEX = re.compile('(?P<element>[A-Z][a-z]?)(?P<count>[0-9]*)') # break apart hill formula into just unique elements (one capital letter, one or no lowercase letters, any (including none) digits)
