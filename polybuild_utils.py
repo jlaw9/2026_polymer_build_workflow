@@ -1,6 +1,8 @@
 '''Collection of functions useful throughout the polymer building process'''
 
-from typing import Any, Generator, Iterable, Optional, TypeAlias, Union
+import logging
+
+from typing import Any, Generator, Iterable, Optional, Sequence, TypeAlias, Union
 StringMap : TypeAlias = dict[str, str]
 
 from collections import Counter
@@ -113,25 +115,89 @@ def cartesian_grid(param_options : dict[str, Iterable[Any]]) -> Generator[dict[s
                 for param_name, param_value in zip(param_options.keys(), param_point)
         }
 
-# POLYMERIZATION
-def generate_smarts_fragments(reactants_dict : dict[str, Chem.Mol], reactor : PolymerizationReactor) -> MonomerGroup:
-    '''Takes a labelled dict of reactant Mols and a PolymerizationReactor object with predefined rxn mechanism
-    Returns a MonomerGroup containing all fragments enumerated by the provided rxn'''
-    monogrp = MonomerGroup()
-    initial_reactants = [reactants for reactants in reactants_dict.values()] # must convert to list to pass to ChemicalReaction
-    
-    for intermediates, frags in reactor.propagate(initial_reactants):
-        for assoc_group_name, rdfragment in zip(reactants_dict.keys(), frags):
-            # generate spec-compliant SMARTS
-            raw_smiles = Chem.MolToSmiles(rdfragment)
-            exp_smiles = specification.expanded_SMILES(raw_smiles)
-            spec_smarts = specification.compliant_mol_SMARTS(exp_smiles)
+# LOGGING
+from contextlib import contextmanager
+from functools import partial
 
-            # record to monomer group
-            affix = 'TERM' if MonomerGroup.is_terminal(rdfragment) else 'MID'
-            monogrp.monomers[f'{assoc_group_name}_{affix}'] = [spec_smarts]
 
-    return monogrp
+TIMESTAMP_LOG = '%Y-%m-%d %H:%M:%S' # timestamp format to use for logging
+LOG_FORMATTER = logging.Formatter('%(asctime)s.%(msecs)03d [%(levelname)-8s:%(module)16s:line %(lineno)-4d] - %(message)s', datefmt=TIMESTAMP_LOG) 
+
+def format_error_for_log(error : Exception) -> str:
+    '''Converts a raised Exception to a loggable string'''
+    return f'{type(error).__name__}: {error!s}'
+
+def create_file_logger(
+        logfile_path : Union[str, Path],
+        logger_name : str,
+        level : int=logging.INFO,
+        mode : str='a',
+        formatter : logging.Formatter=LOG_FORMATTER,
+        suppress_console_logs : bool=True,
+    ) -> tuple[logging.Logger, logging.FileHandler]:
+    '''Create a unique logger (bound to a file) for a Signac job'''
+
+    # Create "mouthpiece" proxy logger which will handle log input
+    logger = logging.getLogger(logger_name)
+    if suppress_console_logs:
+        ... # TODO: figure out how to suppress console logs (contextlib.redirect_stdout doesn't work!)
+
+    # Create new handler to target file idempotently, returning a prior equivalent handler if one already exists
+    for file_handler in logger.handlers:
+        if file_handler.baseFilename == logfile_path:
+            file_handler.mode = mode # TOSELF: not sure if this is safe?
+            break # stop looking once a handler
+    else:
+        file_handler = logging.FileHandler(logfile_path, mode=mode) # make new handler if prior handler is not found
+        
+    # Configure handler properties
+    file_handler.setLevel(level)
+    file_handler.setFormatter(formatter)
+    logger.addHandler(file_handler)
+
+    return logger, file_handler
+
+@contextmanager
+def redirect_to_logfile(
+        logfile_path : Union[str, Path],
+        logger_name : str,
+        level : int=logging.INFO,
+        mode : str='a',
+        formatter : logging.Formatter=LOG_FORMATTER,
+        suppress_console_logs : bool=True,
+        aux_loggers : Optional[Sequence[logging.Logger]]=None,
+    ) -> Generator[logging.Logger, None, None]:
+    '''Initializes a to-file logger for a job, and collects logs '''
+    # Create a file handler
+    proxy_logger, file_handler = create_file_logger(
+        logfile_path=logfile_path,
+        logger_name=logger_name,
+        level=level,
+        mode=mode,
+        formatter=formatter,
+        suppress_console_logs=suppress_console_logs,
+    ) 
+
+    # Temporarily bind handler to auxiliary loggers and suppress stdout
+    if aux_loggers is None:
+        aux_loggers = []
+
+    orig_levels : dict[str, int] = {}
+    for aux_logger in aux_loggers:
+        orig_levels[aux_logger.name] = aux_logger.getEffectiveLevel() # record initial level for reversion at end
+        if suppress_console_logs:
+            ... # TODO: figure out how to suppress console logs (contextlib.redirect_stdout doesn't work!)
+        aux_logger.addHandler(file_handler)
+
+    # Execute 
+    try:
+        yield proxy_logger # supply mouthpiece for wrapped context to log to
+    except Exception as e:
+        proxy_logger.error(format_error_for_log(e))
+    finally:
+        for aux_logger in aux_loggers:
+            aux_logger.setLevel(orig_levels[aux_logger.name])
+            aux_logger.removeHandler(file_handler)
 
 # DATAFILE PARSING
 def parse_field_names_and_roles(dataframe : pd.DataFrame) -> tuple[StringMap, StringMap]:
@@ -152,8 +218,28 @@ def parse_field_names_and_roles(dataframe : pd.DataFrame) -> tuple[StringMap, St
         
     return colname_tag_free, colname_data_role
 
+# POLYMER BUILDING
+## POLYMERIZATION
+def generate_smarts_fragments(reactants_dict : dict[str, Chem.Mol], reactor : PolymerizationReactor) -> MonomerGroup:
+    '''Takes a labelled dict of reactant Mols and a PolymerizationReactor object with predefined rxn mechanism
+    Returns a MonomerGroup containing all fragments enumerated by the provided rxn'''
+    monogrp = MonomerGroup()
+    initial_reactants = [reactants for reactants in reactants_dict.values()] # must convert to list to pass to ChemicalReaction
+    
+    for intermediates, frags in reactor.propagate(initial_reactants):
+        for assoc_group_name, rdfragment in zip(reactants_dict.keys(), frags):
+            # generate spec-compliant SMARTS
+            raw_smiles = Chem.MolToSmiles(rdfragment)
+            exp_smiles = specification.expanded_SMILES(raw_smiles)
+            spec_smarts = specification.compliant_mol_SMARTS(exp_smiles)
 
-# TOPOLOGY PACKING
+            # record to monomer group
+            affix = 'TERM' if MonomerGroup.is_terminal(rdfragment) else 'MID'
+            monogrp.monomers[f'{assoc_group_name}_{affix}'] = [spec_smarts]
+
+    return monogrp
+
+## TOPOLOGY PACKING
 HILL_REGEX = re.compile('(?P<element>[A-Z][a-z]?)(?P<count>[0-9]*)') # break apart hill formula into just unique elements (one capital letter, one or no lowercase letters, any (including none) digits)
 def elem_counts_hill(offmol : Molecule) -> dict[str, int]:
     '''Extract unique elements and their counts from a Molecule object's Hill formula'''
@@ -201,8 +287,7 @@ def generate_uniform_subpopulated_lattice(max_num_atoms : int, num_atoms_in_mol 
 
     return full_lattice # TOSELF: naming here no longer makes sense as lattice is not technically full anymore: worth fixing?
 
-
-# INTERCHANGE AND MD FILE EXPORT
+## INTERCHANGE AND MD FILE EXPORT
 def interchange_to_lammps(interchange : Interchange, lmp_data_path : Path, lmp_input_path : Path) -> None:
     '''Produce LAMMPS input and data files from an OpenFF Interchange'''
     interchange.to_lammps(lmp_data_path) # MD data file
