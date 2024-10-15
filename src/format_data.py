@@ -6,164 +6,21 @@ import logging
 import warnings
 warnings.filterwarnings(action='ignore')
 
-# Stdlib
-from typing import Any, Container, Iterable, Sequence, Optional, Union
-
-from ast import literal_eval
+# Command line interface
 from argparse import ArgumentParser, Namespace
 
 # File I/O
-import json
+import pandas as pd
 from pathlib import Path
 
-import pandas as pd
-
-# Cheminformatics
-from rdkit.Chem import CanonSmiles
-
 # Custom
-from polymerist.smileslib.primitives import is_valid_SMILES
-from polymerist.polymers.monomers import specification
-
-
-# VALIDATING PATHS
-def _stringify_dict(anydict : dict[Any, Any], sep : str=', ', joiner : str='-->') -> str:
-    '''Create an inline string describing the mappping in a dict'''
-    return sep.join(
-        f'({key!s} {joiner} {value!s})'            
-            for key, value in anydict.items()
-    )
-
-def _validate_file_path(
-        path : Path,
-        check_missing : bool=False,
-        check_already_exists : bool=False,
-        check_has_extension : bool=False,
-        valid_extensions : Optional[Container[str]]=None,
-    ) -> None:
-    '''Check that a path exists, is pathlike, and has a valid extension
-    Performs no check by default if no arguments other than the path are passed; these NEED to be supplied when called!'''
-    # Meta-error for nonsensical argument checks
-    if check_missing and check_already_exists:
-        raise ValueError('Incongruent checks requested; invalid to check both that a file already exists AND is missing')
+from utils.filelib import validate_file_path
+from utils.dataIO import READER_FNS_BY_EXT, WRITER_FNS_BY_EXT
+from utils.dataIO import read_rxn_mapping_data, read_monomer_data
+from utils.datafmt import standardize_monomer_data
     
-    # Conditional file checks
-    if check_missing and not path.exists():
-        raise FileNotFoundError(f'No file exists at "{path}"')
-    if check_already_exists and path.exists():
-        raise PermissionError(f'File already exists at "{path}"')
-    if check_has_extension and not path.suffix:
-        raise IsADirectoryError(f'Input file missing file extension, appears like directory ("{path}")')
-    if valid_extensions and (path.suffix not in valid_extensions):
-        raise ValueError(
-            f'Cannot read data from {path.suffix} file, choose one of' \
-            f'the following valid extensions: {[ext for ext in valid_extensions]}' # NOTE: using comprehension instead of list() to give expected output for dicts
-        )
-    
-# SMILES PARSING
-def parse_monomer_smiles(smiles : Union[str, Sequence[str]], canonicalize : bool=True) -> Optional[str]:
-    '''Enforces formatting of SMILES monomer inputs as a single dot-bond joined string of monomer-wise SMILES'''
-    if isinstance(smiles, str): # convert Sequences saved as strings to literal Sequences (i.e.  "('A', 'B')" -> ('A', 'B'))
-        try:
-            smiles = literal_eval(smiles)
-        except (SyntaxError, ValueError):
-            logging.debug(f'SMILES stayed as {smiles} (no tuple-ification detected)')
-    
-    # print('#', smiles)
-    if isinstance(smiles, Sequence) and not isinstance(smiles, str): # strings are technically Sequences, but we don't want to reformat them here
-        smiles = '.'.join(smiles)
-
-    # print('##', smiles)
-    if not (isinstance(smiles, str) and is_valid_SMILES(smiles)):
-        # raise TypeError
-        return None
-    
-    if canonicalize:
-        logging.info(f'Canonicalizing SMILES string "{smiles}"')
-        smiles = CanonSmiles(smiles)
-    
-    return smiles
-    
-# DATAFRAME MANIPULATION
-def locate_attr_cols(dataframe : pd.DataFrame, columns_to_check : dict[str, Iterable[str]]) -> dict[str, str]:
-    '''Takes a dataframe of monomer training data and a dict of desired attributes and the columns in the dataframe it might be found in
-    Checks that those columns are present and returns dict with first column for each if all are present, or NoneType otherwise'''
-    attr_columns : dict[str, str] = {}
-    for targ_attr, col_names_to_check in columns_to_check.items():
-        for col_name in col_names_to_check:
-            if col_name in dataframe:
-                attr_columns[targ_attr] = col_name
-                break
-        else:
-            raise IndexError(f'No matching columns for attribute "{targ_attr} were found from queries: "{col_names_to_check}"')
-    logging.info('Found valid columns name mappings:\n\t' + _stringify_dict(attr_columns))
-        
-    return attr_columns
-
-def standardize_monomer_data(dataframe : pd.DataFrame, rxn_mapping : dict[str, str]) -> None:
-    '''
-    Standardize column naming and format of required monomer data DataFrame (in-place)
-    and ensure required fields for statepoint generation are present
-    '''
-    STATEPOINT_ATTR_COLUMNS : dict[str, tuple[str]] = { # the attributes to save and the column(s) to check for these values
-        'smiles_original' : ('smiles_monomer', 'monomer', 'monomers', 'Monomer', 'Monomers'),
-        'mechanism' : ('mechanism', 'rxnname', 'Chemistry')
-    }
-    attr_locs = locate_attr_cols(dataframe, STATEPOINT_ATTR_COLUMNS) # this will raise Exception if any of the fields cannot be found
-    dataframe.rename(
-        columns={col_found_in : std_name for std_name, col_found_in in attr_locs.items()},
-        inplace=True # perform rename in-place to avoid allocating memory for new (potentially large) dataframe
-    )
-
-    # insert new columns for processed statepoint data
-    logging.info('Canonicalizing all SMILES')
-    dataframe['smiles_canonical'] = dataframe['smiles_original'].map(lambda smi : parse_monomer_smiles(smi, canonicalize=True))
-    
-    logging.info('Expanding SMILES to be chemically explicit')
-    dataframe['smiles_explicit' ] = dataframe['smiles_canonical'].map(lambda smi : specification.expanded_SMILES(smi, assign_map_nums=False))
-    
-    logging.info('Looking up reaction mechanism')
-    dataframe['rxn_smarts'] = dataframe['mechanism'].map(rxn_mapping)
-
-    statepoint_colnames = ['smiles_explicit', 'rxn_smarts'] # explicitly mark statepoint and metadata columns to simplify final parse
-    dataframe.rename(
-        columns=lambda colname : f'{colname}<statedata>' if colname in statepoint_colnames else f'{colname}<metadata>',
-        inplace=True # perform rename in-place to avoid allocating memory for new (potentially large) dataframe 
-    ) 
-
-    return dataframe
 
 # READING INPUT DATA
-READER_FNS_BY_EXT = {
-    '.xlsx' : pd.read_excel,
-    '.csv'  : pd.read_csv,
-}
-WRITER_FNS_BY_EXT = {
-    '.xlsx' : pd.DataFrame.to_excel,
-    '.csv'  : pd.DataFrame.to_csv,
-}
-RXN_MAP_EXTS = ('.json',)
-
-def read_monomer_data(mdat_paths : Iterable[Path]) -> list[pd.DataFrame]:
-    '''Validate and read in a series of monomer data paths
-    Returns a list of dataframes, containing monomer data in the order that paths were passed'''
-    mdat_dataframes : list[pd.DataFrame] = []
-    for mdat_path in mdat_paths:
-        _validate_file_path(mdat_path, valid_extensions=READER_FNS_BY_EXT, check_missing=True)
-        reader_fn = READER_FNS_BY_EXT[mdat_path.suffix] # don't use get() here; WANT a KeyError if invalid
-        logging.info(f'Reading monomer data from {mdat_path}')
-        mdat_dataframes.append(reader_fn(mdat_path))
-
-    return mdat_dataframes
-
-def read_rxn_mapping_data(rxn_mapping_path : Path) -> dict[str, str]:
-    '''Validate and read in a reaction mapping datafile
-    Returns a dict keyed by reaction anem whose keys are SMARTS for the corresponding functional reaction'''
-    _validate_file_path(rxn_mapping_path, valid_extensions=RXN_MAP_EXTS, check_missing=True)
-    with rxn_mapping_path.open('r') as rxn_map_file:
-        logging.info(f'Reading reaction data from {rxn_mapping_path}')
-        return json.load(rxn_map_file)
-    
 def sanitize_monomer_data_paths(args : Namespace) -> list[Path]:
     '''Handles both the direct "monomer-paths" or "glob" modes of passing monomer input files'''
     if not args.output_dir.is_dir():
@@ -174,7 +31,6 @@ def sanitize_monomer_data_paths(args : Namespace) -> list[Path]:
     elif args.monomer_paths is None:
         return [path for path in Path.cwd().glob(args.glob)]
 
-    
 # OPERATION MODES
 def format_merged(args : Namespace) -> None:
     '''
@@ -182,7 +38,7 @@ def format_merged(args : Namespace) -> None:
     "master" file with shared columns, and writes this to a single output file
     '''
     output_path = args.output_dir / args.output_file
-    _validate_file_path(output_path, check_missing=False, check_already_exists=not args.allow_overwrites, valid_extensions=WRITER_FNS_BY_EXT)
+    validate_file_path(output_path, check_missing=False, check_already_exists=not args.allow_overwrites, valid_extensions=WRITER_FNS_BY_EXT)
 
     rxn_mapping = read_rxn_mapping_data(args.rxn_mapping_path)
     monomer_paths = sanitize_monomer_data_paths(args)
@@ -221,7 +77,7 @@ def format_sequential(args : Namespace) -> None:
         output_paths : list[Path] = []
         for input_path in monomer_paths:
             output_path = args.output_dir / f'{input_path.stem}_{args.postfix}{input_path.suffix}'
-            _validate_file_path(output_path, check_missing=False, check_already_exists=not args.allow_overwrites, valid_extensions=WRITER_FNS_BY_EXT)
+            validate_file_path(output_path, check_missing=False, check_already_exists=not args.allow_overwrites, valid_extensions=WRITER_FNS_BY_EXT)
             output_paths.append(output_path)
 
     elif args.postfix is None: 
@@ -235,7 +91,7 @@ def format_sequential(args : Namespace) -> None:
         output_paths : list[Path] = []
         for output_name, input_path in zip(args.new_names, monomer_paths):
             output_path = args.output_dir / f'{output_name}{input_path.suffix}'
-            _validate_file_path(output_path, check_missing=False, check_already_exists=not args.allow_overwrites, valid_extensions=WRITER_FNS_BY_EXT)
+            validate_file_path(output_path, check_missing=False, check_already_exists=not args.allow_overwrites, valid_extensions=WRITER_FNS_BY_EXT)
             output_paths.append(output_path)
 
     # read, reformat, and write out data

@@ -1,1 +1,0 @@
-'''For parsing and formatting monomer data files'''
