@@ -1,0 +1,1 @@
+'''Source code for high-throughput polymer structure generation projects'''
