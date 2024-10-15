@@ -1,0 +1,14 @@
+{
+    "__class__": "ParametersSwept",
+    "__values__": {
+        "DOP": [
+            3
+        ],
+        "n_atoms_max": [
+            10000
+        ],
+        "pcharge_method": [
+            "Espaloma-AM1-BCC"
+        ]
+    }
+}
