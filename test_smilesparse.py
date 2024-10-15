@@ -1,6 +1,6 @@
 '''Unit tests for smilesparse.py'''
 
-from format_monomer_data import parse_monomer_smiles
+from src.utils.cheminf import parse_monomer_smiles
 
 def test_parse_smiles_invalid() -> None:
     '''Test that incorrectly-formatted SMILES fields are processed'''

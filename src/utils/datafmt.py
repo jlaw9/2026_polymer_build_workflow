@@ -2,7 +2,10 @@
 
 import logging
 
-from typing import Iterable
+from typing import Iterable, TypeAlias
+StringMap : TypeAlias = dict[str, str]
+
+import re
 import pandas as pd
 
 from .containers import stringify_dict
@@ -58,3 +61,21 @@ def standardize_monomer_data(dataframe : pd.DataFrame, rxn_mapping : dict[str, s
     ) 
 
     return dataframe
+
+def parse_field_names_and_roles(dataframe : pd.DataFrame) -> tuple[StringMap, StringMap]:
+    '''Extract the field (column) names and data role metadata
+    Returns two dicts mapping from column names as-they-are to names and data roles, respectively'''
+
+    HEADER_ROLE_RE = re.compile('(?P<field_name>.*?)<(?P<field_role>.*?)>') # role is delimited by chevrons
+
+    colname_tag_free  : StringMap = {}
+    colname_data_role : StringMap = {}
+    for colname in dataframe.columns:
+        matches = re.match(HEADER_ROLE_RE, colname)
+        assert matches is not None
+
+        match_fields : StringMap = matches.groupdict()
+        colname_tag_free[colname] = match_fields['field_name']
+        colname_data_role[colname] = match_fields['field_role']
+        
+    return colname_tag_free, colname_data_role

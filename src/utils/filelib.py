@@ -3,6 +3,8 @@
 from typing import Optional, Container
 from pathlib import Path
 
+from polymerist.genutils.decorators.functional import allow_string_paths
+
 
 def validate_file_path(
         path : Path,
@@ -29,3 +31,12 @@ def validate_file_path(
             f'Cannot read data from {path.suffix} file, choose one of' \
             f'the following valid extensions: {[ext for ext in valid_extensions]}' # NOTE: using comprehension instead of list() to give expected output for dicts
         )
+    
+@allow_string_paths
+def is_empty(filepath : Path) -> bool:
+    '''Check whether a given file is empty'''
+    if filepath.is_dir():
+        raise IsADirectoryError(f'filepath must point to file, not to directory "{filepath}"')
+    # NOTE: not checking file existence here, as calling stat() will already do this check (and raise appropriate error)
+
+    return filepath.stat().st_size == 0
