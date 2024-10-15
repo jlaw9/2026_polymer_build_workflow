@@ -1,29 +1,82 @@
 '''Initialize statepoint directories for PolyID Signac workflow'''
 
+from typing import Optional
 from argparse import ArgumentParser, Namespace
 
+import numpy as np
 import pandas as pd
+
+from collections import defaultdict
 from pathlib import Path
 _parent_dir = Path(__file__).parent.resolve()
 
+from signac import init_project
+
+# Internal utilities
 from init_params import ParametersSwept, PARAMS_SWEPT_PATH 
 from init_params import ParametersConfig, PARAMS_CONFIG_PATH
 
+from utils.filelib import validate_file_path
+from utils.dataIO import read_monomer_data
+from utils.datafmt import parse_field_names_and_roles
 
-def read_monomer_data_fields(mono_df_path : Path) -> pd.DataFrame:
+from utils.containers import cartesian_grid
+
+
+# Helper functions
+def read_monomer_dataframe(
+        mono_data_path : Path,
+        number_to_sample : Optional[int]=None,
+        random : bool=False
+    ) -> pd.DataFrame:
     '''Read and subselect monomer data fields according to provided read parameters'''
-    ...
+    monomer_df = read_monomer_data([mono_data_path])[0] # take first of one as THE dataframe
+    monomer_df.set_index(monomer_df.columns[0], inplace=True) # alternative to index_cols arg in read function
+    monomer_df.replace(np.nan, None, inplace=True) # convert NaN values to JSON-serializable NoneType
+    
+    if number_to_sample is not None:
+        if random:
+            monomer_df = monomer_df.sample(number_to_sample)
+        else:
+            monomer_df = monomer_df.head(min(number_to_sample, len(monomer_df)))
 
-def generate_statepoints(
-    monomer_df : pd.DataFrame,
-    params_swept : ParametersSwept, 
-    params_config : ParametersConfig
-) -> None:
+    return monomer_df
+
+def generate_statepoints(args : Namespace) -> None:
     '''Initialize project directory and job statepoint files for chosen monomer data fields'''
-    ...
+    # load monomer data and 
+    monomer_df = read_monomer_dataframe(
+        args.monomer_data,
+        number_to_sample=args.number_to_sample,
+        random=args.random
+    )
 
-def init_project(args : Namespace) -> None:
-    ...
+    validate_file_path(args.parameters_config, check_missing=True, check_has_extension=True, valid_extensions=('.json',))
+    params_config = ParametersConfig.from_file(args.parameters_config).__dict__
+
+    validate_file_path(args.parameters_swept, check_missing=True, check_has_extension=True, valid_extensions=('.json',))
+    params_swept = ParametersSwept.from_file(args.parameters_swept).__dict__
+
+    # create signac project directory and populate data into statepoints
+    project_path = (args.output_dir / args.project_name).resolve()
+    print(project_path)
+    validate_file_path(project_path, check_already_exists=True)
+    project = init_project(args.project_name)
+
+    field_name, field_role = parse_field_names_and_roles(monomer_df)
+    for _, row in monomer_df.iterrows():
+        # divvy up values according to field role
+        rowdata = defaultdict(dict)
+        for field, value in row.items():
+            rowdata[field_role[field]][field_name[field]] = value
+
+        # generate job statepoints and metadata, inject shared state parameters as needed
+        for param_combo in cartesian_grid(params_swept):
+            statepoint = {**rowdata['statedata'], **param_combo, **params_config} # mix together statepoint parameters from all sources
+            metadata   = {**rowdata['metadata']} # shunt accessory data from training set to document
+
+            job = project.open_job(statepoint=statepoint)
+            job.document = metadata
 
 
 def main() -> None:
@@ -67,9 +120,16 @@ def main() -> None:
         required=True,
         help='The toplevel name of the Signac project to be initialized',
     )
+    parser.add_argument(
+        '-od',
+        '--output-dir',
+        type=Path,
+        default=_parent_dir,
+        help='The directory inside which the Signac project should be initialized'
+    )
 
     args = parser.parse_args()
-    print(args)
+    generate_statepoints(args)
 
 if __name__ == '__main__':
     main()
