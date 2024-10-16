@@ -59,7 +59,6 @@ def generate_statepoints(args : Namespace) -> None:
 
     # create signac project directory and populate data into statepoints
     project_path = (args.output_dir / args.project_name).resolve()
-    print(project_path)
     validate_file_path(project_path, check_already_exists=True)
     project = init_project(args.project_name)
 
