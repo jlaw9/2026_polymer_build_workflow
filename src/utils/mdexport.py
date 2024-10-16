@@ -13,8 +13,16 @@ from polymerist.mdtools.openmmtools import serialization
 from polymerist.mdtools.openmmtools.forcegroups import impose_unique_force_groups
 
 
-def interchange_to_lammps(interchange : Interchange, lmp_data_path : Path, lmp_input_path : Path) -> None:
+def interchange_to_lammps(
+        interchange : Interchange,
+        lmp_data_path : Path,
+        lmp_input_path : Path,
+        lmp_data_filestr : Optional[str]=None,
+    ) -> None:
     '''Produce LAMMPS input and data files from an OpenFF Interchange'''
+    if lmp_data_filestr is None:
+        lmp_data_filestr = f'"{lmp_data_path}"' # need surrounding double quotes to allow LAMMPS to read special symbols in filename (if present)
+
     interchange.to_lammps(lmp_data_path) # MD data file
     mdc = MDConfig.from_interchange(interchange)
     # mdc.write_lammps_input(lmp_input_path) # input directive file
@@ -26,7 +34,7 @@ def interchange_to_lammps(interchange : Interchange, lmp_data_path : Path, lmp_i
 
     with lmp_input_path.open('w') as in_file:
         in_file.write(
-            in_file_block.replace('out.lmp', f'"{lmp_data_path}"') # need surrounding double quotes to allow LAMMPS to read special symbols in filename (if present)
+            in_file_block.replace('out.lmp', lmp_data_filestr) 
         )
 
 def interchange_to_openmm(interchange : Interchange, integrator : Integrator, omm_top_path : Path, omm_sys_path : Path, omm_state_path : Path, state_params : Optional[dict[str, bool]]=None) -> Context:
