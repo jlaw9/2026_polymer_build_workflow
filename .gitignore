@@ -16,6 +16,9 @@ polyid_test/*
 polyid_scale/*
 polyid_scale_completed/*
 
+polyid_*/*
+polyID_*/*
+
 # stray files
 **/__pycache__/*
 .model.pt
