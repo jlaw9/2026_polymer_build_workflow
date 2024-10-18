@@ -650,7 +650,7 @@ def neat_melt_to_interchange(job : Job) -> None:
 md_export = PolymerBuildProject.make_group(name='md_export') 
 
 ## LAMMPS versions
-# @PolymerBuildProject.label
+@PolymerBuildProject.label
 def exported_to_LAMMPS(job : Job) -> bool:
     '''Check if LAMMPS files have been generated'''
     return all(
@@ -686,7 +686,7 @@ def evaluate_energies_LAMMPS(job : Job) -> None:
     ...
 
 ## OpenMM versions
-# @PolymerBuildProject.label
+@PolymerBuildProject.label
 def exported_to_OpenMM(job : Job) -> bool:
     '''Check if OpenMM files have been generated'''
     return all(
