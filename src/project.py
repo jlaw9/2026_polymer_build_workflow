@@ -3,10 +3,13 @@ The structure of a polymer building project workflow,
 including a shared namespace, labels, conditions, and operations
 '''
 
+import sys
 import logging
+from argparse import ArgumentParser, Namespace, REMAINDER
+
+from typing import ClassVar, Optional
 
 import pickle
-from typing import ClassVar, Optional
 from functools import partial
 from pathlib import Path
 from string import ascii_uppercase
@@ -42,15 +45,6 @@ from openmm.unit import femtosecond
 # Signac imports
 from signac.job import Job
 from flow import FlowProject
-# logger_signac = logging.getLogger('signac')
-# logger_signac_flow = logging.getLogger('signac.flow')
-# SIGNAC_LOGGERS = [
-#     logger_signac,
-#     logger_signac_flow,
-# ]
-
-# for logger in SIGNAC_LOGGERS:
-#     logger.setLevel(logging.INFO)
 
 # Custom (polymerist) imports
 import polymerist as ps
@@ -71,7 +65,7 @@ from polymerist.rdutils.rdcoords.tiling import rdmol_effective_radius
 from polymerist.rdutils.reactions.reactions import AnnotatedReaction, BadNumberReactants
 from polymerist.rdutils.reactions.reactors import PolymerizationReactor
 
-# Utils imports
+# Utils imports - made these non-relative to avoid screwing up external vs internal call
 from src.utils.logs import redirect_to_logfile
 from src.utils.filelib import is_empty
 from src.utils.offlib import elem_counts
@@ -83,19 +77,19 @@ from src.utils.mdexport import interchange_to_lammps, interchange_to_openmm
 # ATOMS, MONOMERS, AND REACTION MECHANISMS WHICH ARE, FOR ONE REASON OR ANOTHER, NOT ALLOWED
 ALLOWED_FUNCTIONALITIES : set[int] = {2}
 BLACKLISTED_ATOM_QUERIES = {
-    'silicon' : Chem.MolFromSmarts('[Si]'),
     'sulfur'  : Chem.MolFromSmarts('[S]'),
+    # 'phosphorus' : Chem.MolFromSmarts('[P]'),
+    'silicon' : Chem.MolFromSmarts('[Si]'),
     'metal'   : substructures.SPECIAL_QUERY_MOLS['metal'],
     # 'halogen' : substructures.SPECIAL_QUERY_MOLS['halogen'],
 }
-
-BLACKLISTED_MONOMER_SMILES = [ # monomers which are, for one reason or another, disallowed
+_blacklisted_monomer_smiles = [ # monomers which are, for one reason or another, disallowed
     'CC(C)(C)c1cc(c(Oc2ccc(cc2)N(c3ccc(N)cc3)c4ccc(N)cc4)c(c1)C(C)(C)C)C(C)(C)C',  # the extraordinary number of symmetries of this amine ("4-N-(4-aminophenyl)-4-N-[4-(2,4,6-tritert-butylphenoxy)phenyl]benzene-1,4-diamine")... 
     'CC(C)(C)c1cc(Oc2ccc(-c3ccc(N)cc3)cc2C(F)(F)F)c(C(C)(C)C)cc1Oc1ccc(-c2ccc(N)cc2)cc1C(F)(F)F', # ...mean it takes impractically long to isomorphism match during the Topology partition step
     'CCCCCCCCCCCCCCCCC(CO)C(CO)CCCCCCCCCCCCCCCC', # this one is not necessarily highly-automorphic, but DOES hang up the partition algorithm
 ] # TODO: might try setting limit of <1000 automorphisms for automatic check (since this is the default limit for substructure matches)
 BLACKLISTED_MONOMER_QUERIES = {}
-for smiles in BLACKLISTED_MONOMER_SMILES:
+for smiles in _blacklisted_monomer_smiles:
     exp_spi = specification.expanded_SMILES(smiles, assign_map_nums=False)
     banned_mol = Chem.MolFromSmiles(exp_spi, sanitize=False)
     BLACKLISTED_MONOMER_QUERIES[smiles] = banned_mol
@@ -177,7 +171,7 @@ def load_job_rxn(job : Job) -> AnnotatedReaction:
 
     return rxn
 
-def load_job_topology(job : Job, sdf_pathname : str, *args, **kwargs) -> Optional[Molecule]:
+def load_job_topology(job : Job, sdf_pathname : str, *start_args, **kwargs) -> Optional[Molecule]:
     '''Read and return an OpenFF Topology from well-formed SDF file,
     returning None if encoding or other errors are encountered'''
     if not job.isfile(sdf_pathname):
@@ -190,7 +184,7 @@ def load_job_topology(job : Job, sdf_pathname : str, *args, **kwargs) -> Optiona
             return None
 
         try:
-            return topology.topology_from_sdf(sdf_path, *args, **kwargs)
+            return topology.topology_from_sdf(sdf_path, *start_args, **kwargs)
         except UnassignedChemistryInPDBError: # special cases for known common errors
             logger.error('OpenFF will not load molecule with ambiguous stereochemistry')
             return None
@@ -734,7 +728,41 @@ def evaluate_energies_OpenMM(job : Job) -> None:
 
 # enabling CLI interaction
 def main() -> None:
-    PolymerBuildProject().main()
+    parser = ArgumentParser()
+    parser.add_argument(
+        '-path',
+        '--project-path',
+        type=Path,
+        default=Path.cwd(),
+        required=True,
+        help='Path to the directory in which the (presumed initialized) Signac project statepoints reside',
+    ),
+    parser.add_argument(
+        '-qp',
+        '--quantity-precision',
+        type=int,
+        default=4,
+        help='The number of decimal places to which to display and log physcal and numeric quantities',
+    )
+    parser.add_argument(
+        '--strict-stereo',
+        action='store_true',
+        help='Optional, whether to enforce strict and unambiguous stereochemistry when loading molecules into OpenFF toolkit objects',
+    )
+    # TODO : implement log level setting
+
+    # separate this scripts args from those required by signac
+    start_args, signac_args = parser.parse_known_args()
+    assert start_args.project_path.exists() and start_args.project_path.is_dir()
+    
+    # configure global vars in Project definition and initialize project instance
+    PolymerBuildProject.QUANTITY_PRECISION = start_args.quantity_precision
+    PolymerBuildProject.RELAXED_STEREO = not start_args.strict_stereo
+    new_project = PolymerBuildProject.get_project(start_args.project_path)
+
+    # mock remaining Signac args for parser and run project CLI interface
+    sys.argv[1:] = signac_args # NOTE: this is an ugly hack to allow this script to take CLI args while not disturbing Signacs tastes for arguments
+    new_project.main()
 
 if __name__ == '__main__':
     main()
