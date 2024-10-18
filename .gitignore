@@ -9,6 +9,10 @@ plasticizer*/*
 # testing files
 amine_symmetry.ipynb
 
+# debug files
+imports_for_profiling.py
+import_times.*
+
 # testing dirs
 sdf_testing/*
 energy_tables/*
