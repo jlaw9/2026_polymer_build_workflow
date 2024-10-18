@@ -13,8 +13,8 @@ _parent_dir = Path(__file__).parent.resolve()
 from signac import init_project
 
 # Internal utilities
-from src.params import ParametersSwept, PARAMS_SWEPT_PATH 
-from src.params import ParametersConfig, PARAMS_CONFIG_PATH
+from src.parameters import ParametersSwept, PARAMS_SWEPT_PATH 
+from src.parameters import ParametersConfig, PARAMS_CONFIG_PATH
 
 from utils.filelib import validate_file_path
 from utils.dataIO import read_monomer_data
