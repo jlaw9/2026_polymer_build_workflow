@@ -15,7 +15,7 @@ FLAG_PROD="--production"
 if [[ $runlevel == $FLAG_TEST ]]; then
     echo "Initializing test project..."
     projdir="${projname}_test"
-    python src/init_signac.py -mdat $DATAPATH -num 24 --random --project-name $projdir -od $OUTDIR
+    python src/init_signac.py -mdat $DATAPATH -num 12 --random --project-name $projdir -od $OUTDIR
     echo "Project directory '${projdir}' created"
 elif [[ $runlevel == $FLAG_PROD ]]; then
     echo "Initializing production-scale project..."
