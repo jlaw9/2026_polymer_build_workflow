@@ -66,12 +66,12 @@ from polymerist.rdutils.reactions.reactions import AnnotatedReaction, BadNumberR
 from polymerist.rdutils.reactions.reactors import PolymerizationReactor
 
 # Utils imports - made these non-relative to avoid screwing up external vs internal call
-from src.utils.logs import redirect_to_logfile
-from src.utils.filelib import is_empty
-from src.utils.offlib import elem_counts
-from src.utils.cheminf import is_valid_sdfile
-from src.utils.packing import generate_uniform_subpopulated_lattice
-from src.utils.mdexport import interchange_to_lammps, interchange_to_openmm
+from .utils.logs import redirect_to_logfile
+from .utils.filelib import is_empty
+from .utils.offlib import elem_counts
+from .utils.cheminf import is_valid_sdfile
+from .utils.packing import generate_uniform_subpopulated_lattice
+from .utils.mdexport import interchange_to_lammps, interchange_to_openmm
 
 
 # ATOMS, MONOMERS, AND REACTION MECHANISMS WHICH ARE, FOR ONE REASON OR ANOTHER, NOT ALLOWED
