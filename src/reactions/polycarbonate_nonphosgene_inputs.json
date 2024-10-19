@@ -1,0 +1,26 @@
+{
+    "__class__": "ReactionInfo",
+    "__values__": {
+        "reactant_groups": [
+            "hydroxyl",
+            "ester"
+        ],
+        "byproduct_templates": [
+            "alcohol"
+        ],
+        "bond_derangement": {
+            "5": [
+                6,
+                3
+            ],
+            "1": [
+                3,
+                6
+            ]
+        },
+        "test_reactant_smiles": [
+            "Oc1ccc(cc1)C(c2ccc(O)cc2)(C)C",
+            "O=C(Oc1ccccc1)Oc2ccccc2"
+        ]
+    }
+}
