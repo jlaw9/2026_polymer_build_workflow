@@ -13,6 +13,11 @@ amine_symmetry.ipynb
 imports_for_profiling.py
 import_times.*
 
+# source data for polymer build jobs
+# src/monomer_data
+src/reactions
+src/parameters
+
 # testing dirs
 sdf_testing/*
 energy_tables/*
