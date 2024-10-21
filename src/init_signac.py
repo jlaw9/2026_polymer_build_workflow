@@ -8,19 +8,20 @@ import pandas as pd
 
 from collections import defaultdict
 from pathlib import Path
-_parent_dir = Path(__file__).parent.resolve()
 
 from signac import init_project
 
 # Internal utilities
-from src.parameters import ParametersSwept, PARAMS_SWEPT_PATH 
-from src.parameters import ParametersConfig, PARAMS_CONFIG_PATH
+from . import _parent_dir
 
-from src.utils.filelib import validate_file_path
-from src.utils.dataIO import read_monomer_data
-from src.utils.datafmt import parse_field_names_and_roles
+from .parameters import ParametersSwept, PARAMS_SWEPT_PATH 
+from .parameters import ParametersConfig, PARAMS_CONFIG_PATH
 
-from src.utils.containers import cartesian_grid
+from .utils.filelib import validate_file_path
+from .utils.dataIO import read_monomer_data
+from .utils.datafmt import parse_field_names_and_roles
+
+from .utils.containers import cartesian_grid
 
 
 # Helper functions

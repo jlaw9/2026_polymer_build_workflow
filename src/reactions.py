@@ -6,7 +6,6 @@ logging.basicConfig(level=logging.INFO)
 from typing import Sequence, Optional
 
 from pathlib import Path
-_parent_dir = Path(__file__).parent.resolve()
 
 import json
 from dataclasses import dataclass, field
@@ -21,6 +20,7 @@ from polymerist.rdutils.reactions.reactions import AnnotatedReaction
 from polymerist.rdutils.reactions.reactors import PolymerizationReactor
 from polymerist.rdutils.reactions.assembly import ReactionAssembler
 
+from . import _parent_dir
 from .utils.logs import format_error_for_log
 
 

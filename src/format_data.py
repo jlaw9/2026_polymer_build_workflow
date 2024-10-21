@@ -14,10 +14,10 @@ import pandas as pd
 from pathlib import Path
 
 # Custom
-from utils.filelib import validate_file_path
-from utils.dataIO import READER_FNS_BY_EXT, WRITER_FNS_BY_EXT
-from utils.dataIO import read_rxn_mapping_data, read_monomer_data
-from utils.datafmt import standardize_monomer_data
+from .utils.filelib import validate_file_path
+from .utils.dataIO import READER_FNS_BY_EXT, WRITER_FNS_BY_EXT
+from .utils.dataIO import read_rxn_mapping_data, read_monomer_data
+from .utils.datafmt import standardize_monomer_data
     
 
 # READING INPUT DATA

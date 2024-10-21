@@ -1,10 +1,12 @@
 '''Programmatically redefine swept and shared parameter sets for a polymer build Signac Project'''
 
-from pathlib import Path
-_parent_dir = Path(__file__).parent.resolve()
+import logging
+logging.basicConfig(level=logging.INFO)
 
 from dataclasses import dataclass, field
+
 from polymerist.genutils.fileutils.jsonio.jsonify import make_jsonifiable
+from . import _parent_dir
 
 
 # HARD-CODED PATHS WHERE PARAMETERS SHOULD LIVE
@@ -56,6 +58,7 @@ if __name__ == '__main__':
             # 'NAGL',
         ],
     )
+    logging.info('Writing swept parameters to file')
     params_swept.to_file(PARAMS_SWEPT_PATH)
 
     params_config = ParametersConfig( # shared default parameters that we don't expect to have to sweep through
@@ -66,4 +69,5 @@ if __name__ == '__main__':
         nonbonded_cutoff_nm=0.9,
         box_padding_nm=0.0,
     )
+    logging.info('Writing config parameters to file')
     params_config.to_file(PARAMS_CONFIG_PATH)
