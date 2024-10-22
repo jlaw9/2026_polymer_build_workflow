@@ -1,29 +1,32 @@
 '''Unit tests for smilesparse.py'''
 
-from src.utils.cheminf import parse_monomer_smiles
+from typing import Sequence
+import pytest
 
-def test_parse_smiles_invalid() -> None:
+from ..cheminf import parse_monomer_smiles
+
+
+monomer_smiles_valid = [ # all of the following format variations will be accepted
+    'O=C(Cl)Cl.Oc1ccc(C(c2ccc(O)cc2)(C(F)(F)F)C(F)(F)F)cc1',
+    ('O=C(Cl)Cl.Oc1ccc(C(c2ccc(O)cc2)(C(F)(F)F)C(F)(F)F)cc1'),
+    "('O=C(Cl)Cl.Oc1ccc(C(c2ccc(O)cc2)(C(F)(F)F)C(F)(F)F)cc1')",
+    ['O=C(Cl)Cl.Oc1ccc(C(c2ccc(O)cc2)(C(F)(F)F)C(F)(F)F)cc1'],
+    "['O=C(Cl)Cl.Oc1ccc(C(c2ccc(O)cc2)(C(F)(F)F)C(F)(F)F)cc1']",
+]
+monomer_smiles_invalid = [ # all of the following format variations will be accepted
+    'O=C(Cl)Cl, Oc1ccc(C(c2ccc(O)cc2)(C(F)(F)F)C(F)(F)F)cc1',
+    ('O=C(Cl)Cl, Oc1ccc(C(c2ccc(O)cc2)(C(F)(F)F)C(F)(F)F)cc1'),
+    "('O=C(Cl)Cl, Oc1ccc(C(c2ccc(O)cc2)(C(F)(F)F)C(F)(F)F)cc1')",
+    ['O=C(Cl)Cl, Oc1ccc(C(c2ccc(O)cc2)(C(F)(F)F)C(F)(F)F)cc1'],
+    "['O=C(Cl)Cl, Oc1ccc(C(c2ccc(O)cc2)(C(F)(F)F)C(F)(F)F)cc1']",
+]
+
+@pytest.mark.parametrize('valid_smiles', monomer_smiles_valid)
+def test_parse_smiles_valid(valid_smiles : Sequence[str]) -> None:
     '''Test that incorrectly-formatted SMILES fields are processed'''
-    mono_smiles_accepted = [ # all of the following format variations will be accepted
-        'O=C(Cl)Cl.Oc1ccc(C(c2ccc(O)cc2)(C(F)(F)F)C(F)(F)F)cc1',
-        ('O=C(Cl)Cl.Oc1ccc(C(c2ccc(O)cc2)(C(F)(F)F)C(F)(F)F)cc1'),
-        "('O=C(Cl)Cl.Oc1ccc(C(c2ccc(O)cc2)(C(F)(F)F)C(F)(F)F)cc1')",
-        ['O=C(Cl)Cl.Oc1ccc(C(c2ccc(O)cc2)(C(F)(F)F)C(F)(F)F)cc1'],
-        "['O=C(Cl)Cl.Oc1ccc(C(c2ccc(O)cc2)(C(F)(F)F)C(F)(F)F)cc1']",
-    ]
+    assert parse_monomer_smiles(valid_smiles) is not None
 
-    for smi in mono_smiles_accepted:
-        assert(parse_monomer_smiles(smi) is not None)
-
-def test_parse_smiles_invalid() -> None:
+@pytest.mark.parametrize('invalid_smiles', monomer_smiles_invalid)
+def test_parse_smiles_invalid(invalid_smiles : Sequence[str]) -> None:
     '''Test that incorrectly-formatted SMILES fields are rejected'''
-    mono_smiles_invalid = [ # all of the following format variations will be accepted
-        'O=C(Cl)Cl, Oc1ccc(C(c2ccc(O)cc2)(C(F)(F)F)C(F)(F)F)cc1',
-        ('O=C(Cl)Cl, Oc1ccc(C(c2ccc(O)cc2)(C(F)(F)F)C(F)(F)F)cc1'),
-        "('O=C(Cl)Cl, Oc1ccc(C(c2ccc(O)cc2)(C(F)(F)F)C(F)(F)F)cc1')",
-        ['O=C(Cl)Cl, Oc1ccc(C(c2ccc(O)cc2)(C(F)(F)F)C(F)(F)F)cc1'],
-        "['O=C(Cl)Cl, Oc1ccc(C(c2ccc(O)cc2)(C(F)(F)F)C(F)(F)F)cc1']",
-    ]
-    
-    for smi in mono_smiles_invalid:
-        assert(parse_monomer_smiles(smi) is None)
+    assert parse_monomer_smiles(invalid_smiles) is None
