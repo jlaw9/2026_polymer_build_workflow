@@ -73,7 +73,7 @@ from .utils.cheminf import is_valid_sdfile
 from .utils.packing import generate_uniform_subpopulated_lattice
 from .utils.mdexport import interchange_to_lammps, interchange_to_openmm
 
-from .cub_signac_envs import CUAlpineEnvironment, CUBlancaShirtsEnvironment # inject CURC-specific environment config
+from .environments.cuboulder import CUAlpineEnvironment, CUBlancaShirtsEnvironment # inject CURC-specific environment config
 
 
 # ATOMS, MONOMERS, AND REACTION MECHANISMS WHICH ARE, FOR ONE REASON OR ANOTHER, NOT ALLOWED

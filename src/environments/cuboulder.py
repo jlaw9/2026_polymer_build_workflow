@@ -5,7 +5,7 @@ from flow.environment import DefaultSlurmEnvironment, get_environment, _Partitio
 
 class CURCEnvironment(DefaultSlurmEnvironment):
     '''Environment boilerplate common to University of Colorado Boulder Research Computing clusters'''
-    hostname_pattern = r'.*\.rc(\.int)?\.colorado\.edu' # also works on interactive nodes
+    hostname_pattern = r'.*\.rc(\.int)?\.colorado\.edu$' # also works on interactive nodes
     template = 'curc.sh'
 
     @classmethod
@@ -58,10 +58,9 @@ class CURCEnvironment(DefaultSlurmEnvironment):
 class CUAlpineEnvironment(CURCEnvironment):
     '''
     Environment for the University of Colorado Boulder Alpine cluster
-    
     https://curc.readthedocs.io/en/latest/clusters/alpine/alpine-hardware.html
     '''
-    hostname_pattern = r'[^b].*\.rc(\.int)?\.colorado\.edu' # overtly DOESN'T start with "b", also works on interactive nodes
+    hostname_pattern = r'[^b].*\.rc(\.int)?\.colorado\.edu$' # overtly DOESN'T start with "b", also works on interactive nodes
     template = 'alpine.sh'
 
     # partition
@@ -85,6 +84,13 @@ class CUAlpineEnvironment(CURCEnvironment):
             'amc'    : 12,
         },
     )
+    _partition_choices = [
+        partition_name
+            for partition_name in {
+                **_partition_config.cpus_per_node,
+                **_partition_config.gpus_per_node,
+            }
+    ]
 
     @classmethod
     def add_args(cls, parser):
@@ -94,6 +100,12 @@ class CUAlpineEnvironment(CURCEnvironment):
             '--account',
             default='ucb-general',
             help='The name of the allocation being submitted under',
+        )
+        parser.add_argument(
+            '--partition',
+            choices=cls._partition_choices,
+            default='amilan',
+            help='The partition to submit the current job to',
         )
         parser.add_argument(
             '--qos',
@@ -107,8 +119,11 @@ class CUAlpineEnvironment(CURCEnvironment):
         )
 
 class CUBlancaShirtsEnvironment(CURCEnvironment):
-    '''Environment for the Shirts Research Group's allocation on the University of Colorado Boulder Blanca condo cluster'''
-    hostname_pattern = r'b.*\.rc(\.int)?\.colorado\.edu' # starts with "b" also works on interactive nodes
+    '''
+    Environment for the Shirts Research Group's allocation on the University of Colorado Boulder Blanca condo cluster
+    https://curc.readthedocs.io/en/latest/clusters/blanca/blanca.html
+    '''
+    hostname_pattern = r'b.*\.rc(\.int)?\.colorado\.edu$' # starts with "b" also works on interactive nodes
     template = 'blanca_shirts.sh'
 
     @classmethod
@@ -119,6 +134,12 @@ class CUBlancaShirtsEnvironment(CURCEnvironment):
             '--account',
             default='blanca-shirts',
             help='The name of the allocation being submitted under',
+        )
+        parser.add_argument(
+            '--partition',
+            choices=['blanca-shirts'],
+            default='blanca-shirts',
+            help='The partition to submit the current job to',
         )
         parser.add_argument(
             '--qos',
