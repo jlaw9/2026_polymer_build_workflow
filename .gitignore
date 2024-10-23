@@ -9,6 +9,7 @@ plasticizer*/*
 # testing files
 amine_symmetry.ipynb
 src/monomer_data/subsample_NIPU.csv
+*.job
 
 # debug files
 imports_for_profiling.py
