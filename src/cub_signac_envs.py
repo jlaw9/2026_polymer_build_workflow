@@ -11,7 +11,7 @@ class CURCEnvironment(DefaultSlurmEnvironment):
     @classmethod
     def add_args(cls, parser):
         '''Inject Blanca-specific directive into submit command'''
-        super().add_parser(parser)
+        super().add_args(parser)
         parser.add_argument(
             '--nodes',
             type=int,
@@ -89,7 +89,7 @@ class CUAlpineEnvironment(CURCEnvironment):
     @classmethod
     def add_args(cls, parser):
         '''Inject Blanca-specific directive into submit command'''
-        super().add_parser(parser)
+        super().add_args(parser)
         parser.add_argument(
             '--account',
             default='ucb-general',
@@ -114,7 +114,7 @@ class CUBlancaShirtsEnvironment(CURCEnvironment):
     @classmethod
     def add_args(cls, parser):
         '''Inject Blanca-specific directive into submit command'''
-        super().add_parser(parser)
+        super().add_args(parser)
         parser.add_argument(
             '--account',
             default='blanca-shirts',
@@ -125,14 +125,6 @@ class CUBlancaShirtsEnvironment(CURCEnvironment):
             default='blanca-shirts',
             help='Quantlity of Service modifier for requesting special config e.g. longer runtime',
         )
-        parser.add_argument(
-            '--gres',
-            choices=['gpu'],
-            default='gpu',
-            help='Optional generic request for service; used to request GPUs',
-        )
-
-
 
 test_hostnames = [
     'login13.rc.colorado.edu',              # Alpine login node
