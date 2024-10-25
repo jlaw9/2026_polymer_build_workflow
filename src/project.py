@@ -355,7 +355,7 @@ polymerize = PolymerBuildProject.make_group(name='polymerize')
 @polymerize
 @PolymerBuildProject.pre(chemistry_valid)
 @PolymerBuildProject.post(reactant_order_evaluated)
-@PolymerBuildProject.operation
+@PolymerBuildProject.operation(directives={'walltime' : 5/60}) 
 def determine_reactant_order(job : Job) -> None:
     '''
     Check that SMILES monomers are compatible with the 
@@ -744,7 +744,7 @@ def main() -> None:
         '--quantity-precision',
         type=int,
         default=4,
-        help='The number of decimal places to which to display and log physcal and numeric quantities',
+        help='The number of decimal places to which to display and log physical and numeric quantities',
     )
     parser.add_argument(
         '--strict-stereo',
@@ -760,7 +760,13 @@ def main() -> None:
     # configure global vars in Project definition and initialize project instance
     PolymerBuildProject.QUANTITY_PRECISION = start_args.quantity_precision
     PolymerBuildProject.RELAXED_STEREO = not start_args.strict_stereo
-    new_project = PolymerBuildProject.get_project(start_args.project_path)
+    new_project = PolymerBuildProject(
+        path=start_args.project_path,
+        entrypoint={
+            'path' : __file__,
+        }
+    )
+    print(new_project._entrypoint)
 
     # mock remaining Signac args for parser and run project CLI interface
     sys.argv[1:] = signac_args # NOTE: this is an ugly hack to allow this script to take CLI args while not disturbing Signacs tastes for arguments
