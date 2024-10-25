@@ -6,7 +6,7 @@ from flow.environment import DefaultSlurmEnvironment, get_environment, _Partitio
 class CURCEnvironment(DefaultSlurmEnvironment):
     '''Environment boilerplate common to University of Colorado Boulder Research Computing clusters'''
     hostname_pattern = r'.*\.rc(\.int)?\.colorado\.edu$' # also works on interactive nodes
-    # template = 'curc.sh'
+    template = 'curc.sh'
 
     @classmethod
     def add_args(cls, parser):
@@ -61,7 +61,7 @@ class CUAlpineEnvironment(CURCEnvironment):
     https://curc.readthedocs.io/en/latest/clusters/alpine/alpine-hardware.html
     '''
     hostname_pattern = r'[^b].*\.rc(\.int)?\.colorado\.edu$' # overtly DOESN'T start with "b", also works on interactive nodes
-    # template = 'alpine.sh'
+    template = 'alpine.sh'
 
     # partition
     _partition_config = _PartitionConfig(
@@ -124,7 +124,7 @@ class CUBlancaShirtsEnvironment(CURCEnvironment):
     https://curc.readthedocs.io/en/latest/clusters/blanca/blanca.html
     '''
     hostname_pattern = r'b.*\.rc(\.int)?\.colorado\.edu$' # starts with "b" also works on interactive nodes
-    # template = 'blanca_shirts.sh'
+    template = 'blanca.sh'
 
     @classmethod
     def add_args(cls, parser):
