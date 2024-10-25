@@ -26,7 +26,6 @@ class CURCEnvironment(DefaultSlurmEnvironment):
         )
         parser.add_argument(
             '-t',
-            '--time',
             '--walltime',
             type=float,
             help='Job walltime, in number of hours (as float)'
