@@ -94,7 +94,7 @@ class CUAlpineEnvironment(CURCEnvironment):
 
     @classmethod
     def add_args(cls, parser):
-        '''Inject Blanca-specific directive into submit command'''
+        '''Inject Alpine-specific directive into submit command'''
         super().add_args(parser)
         parser.add_argument(
             '--account',

@@ -2,6 +2,12 @@
 
 {% block header %}
     {{- super () -}}
+    {% if qos %}
+#SBATCH --qos={{ qos }}
+    {% endif %}
+    {% if account %}
+#SBATCH --account={{ account }}
+    {% endif %}
 {% endblock header %}
 {% block custom_content %}
 {#
