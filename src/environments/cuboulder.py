@@ -24,12 +24,12 @@ class CURCEnvironment(DefaultSlurmEnvironment):
             default=1,
             help='Number of CPU/GPU cores to request on each node',
         )
-        parser.add_argument(
-            '-t',
-            '--walltime',
-            type=float,
-            help='Job walltime, in number of hours (as float)'
-        )
+        # parser.add_argument(
+        #     '-t',
+        #     '--walltime',
+        #     type=float,
+        #     help='Job walltime, in number of hours (as float)'
+        # )
         parser.add_argument(
             '--gres',
             choices=['gpu'],
