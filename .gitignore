@@ -39,3 +39,4 @@ polyID_*/*
 log.lammps
 out.lmp
 tmp.in
+*.out
