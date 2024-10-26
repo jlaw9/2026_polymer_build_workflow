@@ -354,7 +354,7 @@ everything = PolymerBuildProject.make_group(name='everything') # "master" group 
 
 polymerize = PolymerBuildProject.make_group(name='polymerize')
 
-@everything(directive={'walltime' : 1, 'np' : 1}) # by default, request an hour on 1 processor when submitting everything
+@everything(directives={'walltime' : 1, 'np' : 1}) # by default, request an hour on 1 processor when submitting everything
 @polymerize(directives={'walltime' : 2/60})
 @PolymerBuildProject.pre(chemistry_valid)
 @PolymerBuildProject.post(reactant_order_evaluated)
@@ -382,7 +382,7 @@ def determine_reactant_order(job : Job) -> None:
         else:
             logger.error(f'No valid ordering of reactants could be solved for the chosen "{job.doc.mechanism}" rxn template')
 
-@everything(directive={'walltime' : 1, 'np' : 1}) # by default, request an hour on 1 processor when submitting everything
+@everything(directives={'walltime' : 1, 'np' : 1}) # by default, request an hour on 1 processor when submitting everything
 @polymerize(directives={'walltime' : 2/60})
 @PolymerBuildProject.pre(chemistry_valid) # TODO: find way to cache this from prior reactant order determination step
 @PolymerBuildProject.pre(matches_rxn_template)
@@ -410,7 +410,7 @@ def determine_reactant_functionalities(job : Job) -> None:
 
         job.doc.functionalities = functionalities
 
-@everything(directive={'walltime' : 1, 'np' : 1}) # by default, request an hour on 1 processor when submitting everything
+@everything(directives={'walltime' : 1, 'np' : 1}) # by default, request an hour on 1 processor when submitting everything
 @polymerize(directives={'walltime' : 6/60})
 @PolymerBuildProject.pre(matches_rxn_template)
 @PolymerBuildProject.pre(monomers_satisfy_functionality)
@@ -443,7 +443,7 @@ def enum_fragments(job : Job) -> None:
 # 2) BUILD POLYMER STRUCTURE
 oligomerize = PolymerBuildProject.make_group(name='oligomerize')
 
-@everything(directive={'walltime' : 1, 'np' : 1}) # by default, request an hour on 1 processor when submitting everything
+@everything(directives={'walltime' : 1, 'np' : 1}) # by default, request an hour on 1 processor when submitting everything
 @oligomerize(directives={'walltime' : 15/60})
 # @PolymerBuildProject.pre.copy_from(determine_reactant_order)
 # @PolymerBuildProject.pre.copy_from(enum_fragments)
@@ -475,7 +475,7 @@ def build_oligomer_pdb(job : Job) -> None:
         mbmol_to_openmm_pdb(job.fn(PolymerBuildProject.OLIGOMER_PDB), polymer)
         logger.info('Successfully generated PDB structure file')
 
-@everything(directive={'walltime' : 1, 'np' : 1}) # by default, request an hour on 1 processor when submitting everything
+@everything(directives={'walltime' : 1, 'np' : 1}) # by default, request an hour on 1 processor when submitting everything
 @oligomerize(directives={'walltime' : 15/60})
 # @PolymerBuildProject.pre.copy_from(build_oligomer_pdb)
 @PolymerBuildProject.pre(coordinates_generated)
@@ -492,7 +492,7 @@ def assign_chem_info(job : Job) -> None:
         topology.topology_to_sdf(job.fn(PolymerBuildProject.OLIGOMER_SDF), offtop)
         logger.info('Successfully generated chemically-explicit SDF structure file')
 
-@everything(directive={'walltime' : 1, 'np' : 1}) # by default, request an hour on 1 processor when submitting everything
+@everything(directives={'walltime' : 1, 'np' : 1}) # by default, request an hour on 1 processor when submitting everything
 @oligomerize(directives={'walltime' : 2/60})
 @PolymerBuildProject.pre(chemical_info_assigned)
 @PolymerBuildProject.post.true('r_eff') # this ought to be fine, as these values should never be Falsy
@@ -509,7 +509,7 @@ def summarize_oligomer(job : Job) -> None:
     job.doc.elem_counts_oligomer = elem_counts(offmol)
     job.doc.molar_mass_oligomer = sum(atom.mass for atom in offmol.atoms).magnitude
     
-@everything(directive={'walltime' : 1, 'np' : 1}) # by default, request an hour on 1 processor when submitting everything
+@everything(directives={'walltime' : 1, 'np' : 1}) # by default, request an hour on 1 processor when submitting everything
 @oligomerize(directives={'walltime' : 5/60})
 @PolymerBuildProject.pre(chemical_info_assigned)
 @PolymerBuildProject.post(partial_charges_assigned) # TODO: fill this in with something more substantive!!
@@ -529,7 +529,7 @@ def assign_partial_charges(job : Job) -> None:
 # 3) PACK LATTICE
 pack_lattice = PolymerBuildProject.make_group(name='pack_lattice') 
 
-@everything(directive={'walltime' : 1, 'np' : 1}) # by default, request an hour on 1 processor when submitting everything
+@everything(directives={'walltime' : 1, 'np' : 1}) # by default, request an hour on 1 processor when submitting everything
 @pack_lattice(directives={'walltime' : 2/60})
 @PolymerBuildProject.pre(chemical_info_assigned) # don't need charges, only valid cornformer to pick sites
 @PolymerBuildProject.post.true('n_oligomers')
@@ -548,7 +548,7 @@ def determine_lattice_sites(job : Job) -> None:
     transform = 2.0 * job.doc.r_eff * np.eye(3, dtype=float) # uniform scaling of lattice which guarantees points are one effective diameter apart
     job.data.lattice_sites = int_lattice.linear_transformation(transform, as_coords=False) # save lattice sites to numpy array on disc
 
-@everything(directive={'walltime' : 1, 'np' : 1}) # by default, request an hour on 1 processor when submitting everything
+@everything(directives={'walltime' : 1, 'np' : 1}) # by default, request an hour on 1 processor when submitting everything
 @pack_lattice(directives={'walltime' : 10/60})
 @PolymerBuildProject.pre(partial_charges_assigned)
 @PolymerBuildProject.pre(lattice_sites_determined)
@@ -569,7 +569,7 @@ def pack_oligomers_onto_lattice(job : Job) -> None:
         )
         topology.topology_to_sdf(job.fn(PolymerBuildProject.MELT_NEAT_SDF), melt_offtop)
 
-@everything(directive={'walltime' : 1, 'np' : 1}) # by default, request an hour on 1 processor when submitting everything
+@everything(directives={'walltime' : 1, 'np' : 1}) # by default, request an hour on 1 processor when submitting everything
 @pack_lattice(directives={'walltime' : 2/60})
 @PolymerBuildProject.pre(neat_melt_packed)
 @PolymerBuildProject.post(pbcs_determined)
@@ -607,7 +607,7 @@ def determine_periodic_box(job : Job) -> None:
 # 4) PREPARE AND SERIALIZE OpenFF INTERCHANGE
 to_interchange = PolymerBuildProject.make_group(name='to_interchange') 
 
-@everything(directive={'walltime' : 1, 'np' : 1}) # by default, request an hour on 1 processor when submitting everything
+@everything(directives={'walltime' : 1, 'np' : 1}) # by default, request an hour on 1 processor when submitting everything
 @to_interchange(directives={'walltime' : 30/60})
 @PolymerBuildProject.pre(partial_charges_assigned)
 @PolymerBuildProject.pre(neat_melt_packed)
@@ -673,7 +673,7 @@ def exported_to_LAMMPS(job : Job) -> bool:
             for lmp_file in PolymerBuildProject.LAMMPS_PATHS
     )
 
-@everything(directive={'walltime' : 1, 'np' : 1}) # by default, request an hour on 1 processor when submitting everything
+@everything(directives={'walltime' : 1, 'np' : 1}) # by default, request an hour on 1 processor when submitting everything
 @md_export(directives={'walltime' : 10/60})
 @PolymerBuildProject.pre(has_interchange)
 @PolymerBuildProject.post(exported_to_LAMMPS)
@@ -693,7 +693,7 @@ def export_LAMMPS_files(job : Job) -> None:
         )
         logger.info('LAMMPS files successfully written')
 
-@everything(directive={'walltime' : 1, 'np' : 1}) # by default, request an hour on 1 processor when submitting everything
+@everything(directives={'walltime' : 1, 'np' : 1}) # by default, request an hour on 1 processor when submitting everything
 @md_export(directives={'walltime' : 5/60})
 @PolymerBuildProject.pre(exported_to_LAMMPS)
 @PolymerBuildProject.pre.never
@@ -712,7 +712,7 @@ def exported_to_OpenMM(job : Job) -> bool:
             for lmp_file in PolymerBuildProject.OPENMM_PATHS
     )
 
-@everything(directive={'walltime' : 1, 'np' : 1}) # by default, request an hour on 1 processor when submitting everything
+@everything(directives={'walltime' : 1, 'np' : 1}) # by default, request an hour on 1 processor when submitting everything
 @md_export(directives={'walltime' : 10/60})
 @PolymerBuildProject.pre(has_interchange)
 @PolymerBuildProject.pre.never
@@ -736,7 +736,7 @@ def export_OpenMM_files(job : Job) -> None:
         )
         logger.info('OpenMM files successfully written')
 
-@everything(directive={'walltime' : 1, 'np' : 1}) # by default, request an hour on 1 processor when submitting everything
+@everything(directives={'walltime' : 1, 'np' : 1}) # by default, request an hour on 1 processor when submitting everything
 @md_export(directives={'walltime' : 5/60})
 @PolymerBuildProject.pre(exported_to_LAMMPS)
 @PolymerBuildProject.pre.never
