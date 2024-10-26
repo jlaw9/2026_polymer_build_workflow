@@ -736,7 +736,7 @@ def main() -> None:
         '--project-path',
         type=Path,
         default=Path.cwd(),
-        required=True,
+        # required=True,
         help='Path to the directory in which the (presumed initialized) Signac project statepoints reside',
     ),
     parser.add_argument(
@@ -766,7 +766,6 @@ def main() -> None:
             'path' : __file__,
         }
     )
-    print(new_project._entrypoint)
 
     # mock remaining Signac args for parser and run project CLI interface
     sys.argv[1:] = signac_args # NOTE: this is an ugly hack to allow this script to take CLI args while not disturbing Signacs tastes for arguments
