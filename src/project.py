@@ -79,8 +79,9 @@ from environments.cuboulder import CUAlpineEnvironment, CUBlancaShirtsEnvironmen
 # ATOMS, MONOMERS, AND REACTION MECHANISMS WHICH ARE, FOR ONE REASON OR ANOTHER, NOT ALLOWED
 ALLOWED_FUNCTIONALITIES : set[int] = {2}
 BLACKLISTED_ATOM_QUERIES = {
-    'sulfur'  : Chem.MolFromSmarts('[S]'),
+    # 'boron' : Chem.MolFromSmarts('[B]'),
     # 'phosphorus' : Chem.MolFromSmarts('[P]'),
+    'sulfur'  : Chem.MolFromSmarts('[S]'),
     'silicon' : Chem.MolFromSmarts('[Si]'),
     'metal'   : substructures.SPECIAL_QUERY_MOLS['metal'],
     # 'halogen' : substructures.SPECIAL_QUERY_MOLS['halogen'],
