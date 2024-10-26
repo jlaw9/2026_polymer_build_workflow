@@ -349,16 +349,16 @@ def interchange_stereo_inconsistent(job : Job) -> bool:
 
 
 # OPERATIONS
-# 1) TEST FOR RXN TEMPLATE COMPLIANCE AND ENUMERATE CHEMICAL FRAGMENTS
 everything = PolymerBuildProject.make_group(name='everything') # "master" group which allows submission of all operations
 
+# 1) TEST FOR RXN TEMPLATE COMPLIANCE AND ENUMERATE CHEMICAL FRAGMENTS
 polymerize = PolymerBuildProject.make_group(name='polymerize')
 
-@everything(directives={'walltime' : 1, 'np' : 1}) # by default, request an hour on 1 processor when submitting everything
-@polymerize(directives={'walltime' : 2/60})
+@everything
+@polymerize
 @PolymerBuildProject.pre(chemistry_valid)
 @PolymerBuildProject.post(reactant_order_evaluated)
-@PolymerBuildProject.operation 
+@PolymerBuildProject.operation(directives={'walltime' : 2/60, 'np' : 1})
 def determine_reactant_order(job : Job) -> None:
     '''
     Check that SMILES monomers are compatible with the 
@@ -382,12 +382,12 @@ def determine_reactant_order(job : Job) -> None:
         else:
             logger.error(f'No valid ordering of reactants could be solved for the chosen "{job.doc.mechanism}" rxn template')
 
-@everything(directives={'walltime' : 1, 'np' : 1}) # by default, request an hour on 1 processor when submitting everything
-@polymerize(directives={'walltime' : 2/60})
+@everything
+@polymerize
 @PolymerBuildProject.pre(chemistry_valid) # TODO: find way to cache this from prior reactant order determination step
 @PolymerBuildProject.pre(matches_rxn_template)
 @PolymerBuildProject.post(functionalities_evaluated)
-@PolymerBuildProject.operation
+@PolymerBuildProject.operation(directives={'walltime' : 2/60, 'np' : 1})
 def determine_reactant_functionalities(job : Job) -> None:
     '''
     Once a reactant ordering has been identified, determine how many of
@@ -410,12 +410,12 @@ def determine_reactant_functionalities(job : Job) -> None:
 
         job.doc.functionalities = functionalities
 
-@everything(directives={'walltime' : 1, 'np' : 1}) # by default, request an hour on 1 processor when submitting everything
-@polymerize(directives={'walltime' : 6/60})
+@everything
+@polymerize
 @PolymerBuildProject.pre(matches_rxn_template)
 @PolymerBuildProject.pre(monomers_satisfy_functionality)
 @PolymerBuildProject.post(has_chemical_fragments)
-@PolymerBuildProject.operation
+@PolymerBuildProject.operation(directives={'walltime' : 2/60, 'np' : 1})
 def enum_fragments(job : Job) -> None:
     '''Enumerate all possible repeat unit fragment using cheminformatic reaction procedure'''
     rxn = load_job_rxn(job)
@@ -443,13 +443,13 @@ def enum_fragments(job : Job) -> None:
 # 2) BUILD POLYMER STRUCTURE
 oligomerize = PolymerBuildProject.make_group(name='oligomerize')
 
-@everything(directives={'walltime' : 1, 'np' : 1}) # by default, request an hour on 1 processor when submitting everything
-@oligomerize(directives={'walltime' : 15/60})
+@everything
+@oligomerize
 # @PolymerBuildProject.pre.copy_from(determine_reactant_order)
 # @PolymerBuildProject.pre.copy_from(enum_fragments)
 @PolymerBuildProject.pre(has_chemical_fragments)
 @PolymerBuildProject.post(coordinates_generated)
-@PolymerBuildProject.operation
+@PolymerBuildProject.operation(directives={'walltime' : 15/60, 'np' : 1})
 def build_oligomer_pdb(job : Job) -> None:
     '''Generate coordinates and build oligomer PDB file using mBuild'''
     seq = 'BA' # hard-coded for now, plan to make more flexible in the future
@@ -475,12 +475,12 @@ def build_oligomer_pdb(job : Job) -> None:
         mbmol_to_openmm_pdb(job.fn(PolymerBuildProject.OLIGOMER_PDB), polymer)
         logger.info('Successfully generated PDB structure file')
 
-@everything(directives={'walltime' : 1, 'np' : 1}) # by default, request an hour on 1 processor when submitting everything
-@oligomerize(directives={'walltime' : 15/60})
+@everything
+@oligomerize
 # @PolymerBuildProject.pre.copy_from(build_oligomer_pdb)
 @PolymerBuildProject.pre(coordinates_generated)
 @PolymerBuildProject.post(chemical_info_assigned)
-@PolymerBuildProject.operation
+@PolymerBuildProject.operation(directives={'walltime' : 20/60, 'np' : 1})
 def assign_chem_info(job : Job) -> None:
     '''Assign chemical information to bare PDB graph and export completely-specified system to SDF file'''
     monogrp = MonomerGroup.from_file(job.fn(PolymerBuildProject.FRAGMENTS_PATH))
@@ -492,14 +492,14 @@ def assign_chem_info(job : Job) -> None:
         topology.topology_to_sdf(job.fn(PolymerBuildProject.OLIGOMER_SDF), offtop)
         logger.info('Successfully generated chemically-explicit SDF structure file')
 
-@everything(directives={'walltime' : 1, 'np' : 1}) # by default, request an hour on 1 processor when submitting everything
-@oligomerize(directives={'walltime' : 2/60})
+@everything
+@oligomerize
 @PolymerBuildProject.pre(chemical_info_assigned)
 @PolymerBuildProject.post.true('r_eff') # this ought to be fine, as these values should never be Falsy
 @PolymerBuildProject.post.true('n_atoms_oligomer') # this ought to be fine, as these values should never be Falsy
 @PolymerBuildProject.post.true('elem_counts_oligomer') # this ought to be fine, as these values should never be Falsy
 @PolymerBuildProject.post.true('molar_mass_oligomer') # this ought to be fine, as these values should never be Falsy
-@PolymerBuildProject.operation
+@PolymerBuildProject.operation(directives={'walltime' : 2/60, 'np' : 1})
 def summarize_oligomer(job : Job) -> None:
     '''Compute simple summarizing info about an oligomer which streamline lattice packing,
     namely the number of atoms, the distribution of elements and the effect (max) radius'''
@@ -509,11 +509,11 @@ def summarize_oligomer(job : Job) -> None:
     job.doc.elem_counts_oligomer = elem_counts(offmol)
     job.doc.molar_mass_oligomer = sum(atom.mass for atom in offmol.atoms).magnitude
     
-@everything(directives={'walltime' : 1, 'np' : 1}) # by default, request an hour on 1 processor when submitting everything
-@oligomerize(directives={'walltime' : 5/60})
+@everything
+@oligomerize
 @PolymerBuildProject.pre(chemical_info_assigned)
 @PolymerBuildProject.post(partial_charges_assigned) # TODO: fill this in with something more substantive!!
-@PolymerBuildProject.operation
+@PolymerBuildProject.operation(directives={'walltime' : 3/60, 'np' : 1})
 def assign_partial_charges(job : Job) -> None:
     '''Generate coordinates and build oligomer PDB file using mBuild'''
     offmol = load_job_oligomer_molecule(job)
@@ -529,13 +529,13 @@ def assign_partial_charges(job : Job) -> None:
 # 3) PACK LATTICE
 pack_lattice = PolymerBuildProject.make_group(name='pack_lattice') 
 
-@everything(directives={'walltime' : 1, 'np' : 1}) # by default, request an hour on 1 processor when submitting everything
-@pack_lattice(directives={'walltime' : 2/60})
+@everything
+@pack_lattice
 @PolymerBuildProject.pre(chemical_info_assigned) # don't need charges, only valid cornformer to pick sites
 @PolymerBuildProject.post.true('n_oligomers')
 @PolymerBuildProject.post.true('lattice_shape')
 @PolymerBuildProject.post(lattice_sites_determined)
-@PolymerBuildProject.operation
+@PolymerBuildProject.operation(directives={'walltime' : 2/60, 'np' : 1})
 def determine_lattice_sites(job : Job) -> None:
     '''Choose smallest accomodating cubic lattice, randomly subsample sites, and scale appropriately to oligomer size'''
     int_lattice = generate_uniform_subpopulated_lattice(
@@ -548,12 +548,12 @@ def determine_lattice_sites(job : Job) -> None:
     transform = 2.0 * job.doc.r_eff * np.eye(3, dtype=float) # uniform scaling of lattice which guarantees points are one effective diameter apart
     job.data.lattice_sites = int_lattice.linear_transformation(transform, as_coords=False) # save lattice sites to numpy array on disc
 
-@everything(directives={'walltime' : 1, 'np' : 1}) # by default, request an hour on 1 processor when submitting everything
-@pack_lattice(directives={'walltime' : 10/60})
+@everything
+@pack_lattice
 @PolymerBuildProject.pre(partial_charges_assigned)
 @PolymerBuildProject.pre(lattice_sites_determined)
 @PolymerBuildProject.post(neat_melt_packed)
-@PolymerBuildProject.operation
+@PolymerBuildProject.operation(directives={'walltime' : 15/60, 'np' : 1})
 def pack_oligomers_onto_lattice(job : Job) -> None:
     '''Clone, randomly rotate, and move oligomer onto predetermined lattice sites'''
     offmol = load_job_oligomer_molecule(job)
@@ -569,11 +569,11 @@ def pack_oligomers_onto_lattice(job : Job) -> None:
         )
         topology.topology_to_sdf(job.fn(PolymerBuildProject.MELT_NEAT_SDF), melt_offtop)
 
-@everything(directives={'walltime' : 1, 'np' : 1}) # by default, request an hour on 1 processor when submitting everything
-@pack_lattice(directives={'walltime' : 2/60})
+@everything
+@pack_lattice
 @PolymerBuildProject.pre(neat_melt_packed)
 @PolymerBuildProject.post(pbcs_determined)
-@PolymerBuildProject.operation
+@PolymerBuildProject.operation(directives={'walltime' : 2/60, 'np' : 1})
 def determine_periodic_box(job : Job) -> None:
     '''Size and cache periodic box vectors for the resulting melt topology'''
     melt_offtop    : Topology    = load_job_melt_neat_topology(job)
@@ -607,15 +607,15 @@ def determine_periodic_box(job : Job) -> None:
 # 4) PREPARE AND SERIALIZE OpenFF INTERCHANGE
 to_interchange = PolymerBuildProject.make_group(name='to_interchange') 
 
-@everything(directives={'walltime' : 1, 'np' : 1}) # by default, request an hour on 1 processor when submitting everything
-@to_interchange(directives={'walltime' : 30/60})
+@everything
+@to_interchange
 @PolymerBuildProject.pre(partial_charges_assigned)
 @PolymerBuildProject.pre(neat_melt_packed)
 @PolymerBuildProject.pre(pbcs_determined)
 @PolymerBuildProject.pre(forcefield_is_valid)
 @PolymerBuildProject.pre.not_(interchange_stereo_inconsistent)
 @PolymerBuildProject.post(has_interchange)
-@PolymerBuildProject.operation
+@PolymerBuildProject.operation(directives={'walltime' : 20/60, 'np' : 1})
 def neat_melt_to_interchange(job : Job) -> None:
     '''Create Interchange from final melt (w/ appropriate FF parameters and cutoffs) and pickle for reuse'''
     cmol = load_job_oligomer_molecule(job) # need charged molecule for reference to avoid expensive AM1-BCC default
@@ -673,11 +673,11 @@ def exported_to_LAMMPS(job : Job) -> bool:
             for lmp_file in PolymerBuildProject.LAMMPS_PATHS
     )
 
-@everything(directives={'walltime' : 1, 'np' : 1}) # by default, request an hour on 1 processor when submitting everything
-@md_export(directives={'walltime' : 10/60})
+@everything
+@md_export
 @PolymerBuildProject.pre(has_interchange)
 @PolymerBuildProject.post(exported_to_LAMMPS)
-@PolymerBuildProject.operation
+@PolymerBuildProject.operation(directives={'walltime' : 10/60, 'np' : 1})
 def export_LAMMPS_files(job : Job) -> None:
     '''Write LAMMPS data and input files for the melt topology'''
     interchange = load_job_interchange(job)
@@ -693,12 +693,12 @@ def export_LAMMPS_files(job : Job) -> None:
         )
         logger.info('LAMMPS files successfully written')
 
-@everything(directives={'walltime' : 1, 'np' : 1}) # by default, request an hour on 1 processor when submitting everything
-@md_export(directives={'walltime' : 5/60})
+@everything
+@md_export
 @PolymerBuildProject.pre(exported_to_LAMMPS)
 @PolymerBuildProject.pre.never
 @PolymerBuildProject.post.isfile(f'energies_LAMMPS.json')
-@PolymerBuildProject.operation
+@PolymerBuildProject.operation(directives={'walltime' : 5/60, 'np' : 1})
 def evaluate_energies_LAMMPS(job : Job) -> None:
     '''Evaluate starting structure energies of LAMMPS MD files'''
     ...
@@ -712,12 +712,12 @@ def exported_to_OpenMM(job : Job) -> bool:
             for lmp_file in PolymerBuildProject.OPENMM_PATHS
     )
 
-@everything(directives={'walltime' : 1, 'np' : 1}) # by default, request an hour on 1 processor when submitting everything
-@md_export(directives={'walltime' : 10/60})
+@everything
+@md_export
 @PolymerBuildProject.pre(has_interchange)
 @PolymerBuildProject.pre.never
 @PolymerBuildProject.post(exported_to_OpenMM)
-@PolymerBuildProject.operation
+@PolymerBuildProject.operation(directives={'walltime' : 15/60, 'np' : 1})
 def export_OpenMM_files(job : Job) -> None:
     '''Write OpenMM data and input files for the melt topology'''
     interchange = load_job_interchange(job)
@@ -736,12 +736,12 @@ def export_OpenMM_files(job : Job) -> None:
         )
         logger.info('OpenMM files successfully written')
 
-@everything(directives={'walltime' : 1, 'np' : 1}) # by default, request an hour on 1 processor when submitting everything
-@md_export(directives={'walltime' : 5/60})
+@everything
+@md_export
 @PolymerBuildProject.pre(exported_to_LAMMPS)
 @PolymerBuildProject.pre.never
 @PolymerBuildProject.post.isfile(f'energies_OpenMM.json')
-@PolymerBuildProject.operation
+@PolymerBuildProject.operation(directives={'walltime' : 5/60, 'np' : 1})
 def evaluate_energies_OpenMM(job : Job) -> None:
     '''Evaluate starting structure energies of OpenMM MD files'''
     ...
