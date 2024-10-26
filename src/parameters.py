@@ -47,11 +47,11 @@ if __name__ == '__main__':
     params_swept = ParametersSwept( # define other parameters to sweep here!
         DOP=[
             3,
-            # 5,
+            5,
         ],
         n_atoms_max=[
-            10_000,
-            # 20_000,
+            # 10_000,
+            20_000,
         ],
         pcharge_method=[
             'Espaloma-AM1-BCC',
