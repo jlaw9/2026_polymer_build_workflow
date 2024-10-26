@@ -115,7 +115,7 @@ class CUAlpineEnvironment(CURCEnvironment):
                 'mem',
             ],
             default='normal',
-            help='Quantlity of Service modifier for requesting special config e.g. longer runtime',
+            help='Quality of Service modifier for requesting special config e.g. longer runtime',
         )
 
 class CUBlancaShirtsEnvironment(CURCEnvironment):
