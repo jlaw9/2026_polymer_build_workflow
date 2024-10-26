@@ -352,10 +352,10 @@ def interchange_stereo_inconsistent(job : Job) -> bool:
 # 1) TEST FOR RXN TEMPLATE COMPLIANCE AND ENUMERATE CHEMICAL FRAGMENTS
 polymerize = PolymerBuildProject.make_group(name='polymerize')
 
-@polymerize
+@polymerize(directives={'walltime' : 2/60})
 @PolymerBuildProject.pre(chemistry_valid)
 @PolymerBuildProject.post(reactant_order_evaluated)
-@PolymerBuildProject.operation(directives={'walltime' : 5/60}) 
+@PolymerBuildProject.operation 
 def determine_reactant_order(job : Job) -> None:
     '''
     Check that SMILES monomers are compatible with the 
@@ -379,7 +379,7 @@ def determine_reactant_order(job : Job) -> None:
         else:
             logger.error(f'No valid ordering of reactants could be solved for the chosen "{job.doc.mechanism}" rxn template')
 
-@polymerize
+@polymerize(directives={'walltime' : 2/60})
 @PolymerBuildProject.pre(chemistry_valid) # TODO: find way to cache this from prior reactant order determination step
 @PolymerBuildProject.pre(matches_rxn_template)
 @PolymerBuildProject.post(functionalities_evaluated)
@@ -406,7 +406,7 @@ def determine_reactant_functionalities(job : Job) -> None:
 
         job.doc.functionalities = functionalities
 
-@polymerize
+@polymerize(directives={'walltime' : 6/60})
 @PolymerBuildProject.pre(matches_rxn_template)
 @PolymerBuildProject.pre(monomers_satisfy_functionality)
 @PolymerBuildProject.post(has_chemical_fragments)
@@ -438,7 +438,7 @@ def enum_fragments(job : Job) -> None:
 # 2) BUILD POLYMER STRUCTURE
 oligomerize = PolymerBuildProject.make_group(name='oligomerize')
 
-@oligomerize
+@oligomerize(directives={'walltime' : 15/60})
 # @PolymerBuildProject.pre.copy_from(determine_reactant_order)
 # @PolymerBuildProject.pre.copy_from(enum_fragments)
 @PolymerBuildProject.pre(has_chemical_fragments)
@@ -469,7 +469,7 @@ def build_oligomer_pdb(job : Job) -> None:
         mbmol_to_openmm_pdb(job.fn(PolymerBuildProject.OLIGOMER_PDB), polymer)
         logger.info('Successfully generated PDB structure file')
 
-@oligomerize
+@oligomerize(directives={'walltime' : 15/60})
 # @PolymerBuildProject.pre.copy_from(build_oligomer_pdb)
 @PolymerBuildProject.pre(coordinates_generated)
 @PolymerBuildProject.post(chemical_info_assigned)
@@ -485,7 +485,7 @@ def assign_chem_info(job : Job) -> None:
         topology.topology_to_sdf(job.fn(PolymerBuildProject.OLIGOMER_SDF), offtop)
         logger.info('Successfully generated chemically-explicit SDF structure file')
 
-@oligomerize
+@oligomerize(directives={'walltime' : 2/60})
 @PolymerBuildProject.pre(chemical_info_assigned)
 @PolymerBuildProject.post.true('r_eff') # this ought to be fine, as these values should never be Falsy
 @PolymerBuildProject.post.true('n_atoms_oligomer') # this ought to be fine, as these values should never be Falsy
@@ -501,7 +501,7 @@ def summarize_oligomer(job : Job) -> None:
     job.doc.elem_counts_oligomer = elem_counts(offmol)
     job.doc.molar_mass_oligomer = sum(atom.mass for atom in offmol.atoms).magnitude
     
-@oligomerize
+@oligomerize(directives={'walltime' : 5/60})
 @PolymerBuildProject.pre(chemical_info_assigned)
 @PolymerBuildProject.post(partial_charges_assigned) # TODO: fill this in with something more substantive!!
 @PolymerBuildProject.operation
@@ -520,7 +520,7 @@ def assign_partial_charges(job : Job) -> None:
 # 3) PACK LATTICE
 pack_lattice = PolymerBuildProject.make_group(name='pack_lattice') 
 
-@pack_lattice
+@pack_lattice(directives={'walltime' : 2/60})
 @PolymerBuildProject.pre(chemical_info_assigned) # don't need charges, only valid cornformer to pick sites
 @PolymerBuildProject.post.true('n_oligomers')
 @PolymerBuildProject.post.true('lattice_shape')
@@ -538,7 +538,7 @@ def determine_lattice_sites(job : Job) -> None:
     transform = 2.0 * job.doc.r_eff * np.eye(3, dtype=float) # uniform scaling of lattice which guarantees points are one effective diameter apart
     job.data.lattice_sites = int_lattice.linear_transformation(transform, as_coords=False) # save lattice sites to numpy array on disc
 
-@pack_lattice
+@pack_lattice(directives={'walltime' : 10/60})
 @PolymerBuildProject.pre(partial_charges_assigned)
 @PolymerBuildProject.pre(lattice_sites_determined)
 @PolymerBuildProject.post(neat_melt_packed)
@@ -558,7 +558,7 @@ def pack_oligomers_onto_lattice(job : Job) -> None:
         )
         topology.topology_to_sdf(job.fn(PolymerBuildProject.MELT_NEAT_SDF), melt_offtop)
 
-@pack_lattice
+@pack_lattice(directives={'walltime' : 2/60})
 @PolymerBuildProject.pre(neat_melt_packed)
 @PolymerBuildProject.post(pbcs_determined)
 @PolymerBuildProject.operation
@@ -595,7 +595,7 @@ def determine_periodic_box(job : Job) -> None:
 # 4) PREPARE AND SERIALIZE OpenFF INTERCHANGE
 to_interchange = PolymerBuildProject.make_group(name='to_interchange') 
 
-@to_interchange
+@to_interchange(directives={'walltime' : 30/60})
 @PolymerBuildProject.pre(partial_charges_assigned)
 @PolymerBuildProject.pre(neat_melt_packed)
 @PolymerBuildProject.pre(pbcs_determined)
@@ -660,7 +660,7 @@ def exported_to_LAMMPS(job : Job) -> bool:
             for lmp_file in PolymerBuildProject.LAMMPS_PATHS
     )
 
-@md_export
+@md_export(directives={'walltime' : 10/60})
 @PolymerBuildProject.pre(has_interchange)
 @PolymerBuildProject.post(exported_to_LAMMPS)
 @PolymerBuildProject.operation
@@ -679,6 +679,7 @@ def export_LAMMPS_files(job : Job) -> None:
         )
         logger.info('LAMMPS files successfully written')
 
+@md_export(directives={'walltime' : 5/60})
 @PolymerBuildProject.pre(exported_to_LAMMPS)
 @PolymerBuildProject.pre.never
 @PolymerBuildProject.post.isfile(f'energies_LAMMPS.json')
@@ -696,7 +697,7 @@ def exported_to_OpenMM(job : Job) -> bool:
             for lmp_file in PolymerBuildProject.OPENMM_PATHS
     )
 
-@md_export
+@md_export(directives={'walltime' : 10/60})
 @PolymerBuildProject.pre(has_interchange)
 @PolymerBuildProject.pre.never
 @PolymerBuildProject.post(exported_to_OpenMM)
@@ -719,6 +720,7 @@ def export_OpenMM_files(job : Job) -> None:
         )
         logger.info('OpenMM files successfully written')
 
+@md_export(directives={'walltime' : 5/60})
 @PolymerBuildProject.pre(exported_to_LAMMPS)
 @PolymerBuildProject.pre.never
 @PolymerBuildProject.post.isfile(f'energies_OpenMM.json')
