@@ -74,20 +74,20 @@ from polymerist.rdutils.reactions.reactions import AnnotatedReaction, BadNumberR
 from polymerist.rdutils.reactions.reactors import PolymerizationReactor
 
 # Utils imports - made these non-relative to avoid screwing up external vs internal call
-try:
-    from utils.logs import redirect_to_logfile
-    from utils.filelib import is_empty
-    from utils.offlib import elem_counts
-    from utils.packing import generate_uniform_subpopulated_lattice
-    from utils.mdexport import interchange_to_lammps, interchange_to_openmm
-    from environments.cuboulder import CUAlpineEnvironment, CUBlancaShirtsEnvironment # inject CURC-specific environment config
-except ModuleNotFoundError: # hacky workaround to support both direct script call and relative imports
+try: # call as python module
     from .utils.logs import redirect_to_logfile
     from .utils.filelib import is_empty
     from .utils.offlib import elem_counts
     from .utils.packing import generate_uniform_subpopulated_lattice
     from .utils.mdexport import interchange_to_lammps, interchange_to_openmm
     from .environments.cuboulder import CUAlpineEnvironment, CUBlancaShirtsEnvironment # inject CURC-specific environment config
+except ImportError: # call as script file
+    from utils.logs import redirect_to_logfile
+    from utils.filelib import is_empty
+    from utils.offlib import elem_counts
+    from utils.packing import generate_uniform_subpopulated_lattice
+    from utils.mdexport import interchange_to_lammps, interchange_to_openmm
+    from environments.cuboulder import CUAlpineEnvironment, CUBlancaShirtsEnvironment # inject CURC-specific environment config
 
 
 # ATOMS, MONOMERS, AND REACTION MECHANISMS WHICH ARE, FOR ONE REASON OR ANOTHER, NOT ALLOWED
