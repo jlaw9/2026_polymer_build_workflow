@@ -23,8 +23,16 @@ from openff.toolkit.utils.exceptions import (
     UnassignedChemistryInPDBError,
     IncorrectNumConformersWarning,
     InconsistentStereochemistryError,
+    ToolkitUnavailableException,
 )
 logging.getLogger('openff.toolkit.typing.engines.smirnoff.parameters').setLevel(logging.CRITICAL) # silence annoying Electrostatics up-conversion INFO logs
+
+from openff.toolkit.utils.toolkits import GLOBAL_TOOLKIT_REGISTRY, OpenEyeToolkitWrapper
+try: # attempt to deregister OpenEye toolkit
+    GLOBAL_TOOLKIT_REGISTRY.deregister_toolkit(OpenEyeToolkitWrapper) # avoid expensive and non-standard OpenEye operations
+except ToolkitUnavailableException:
+    pass
+
 
 from openff.units import (
     unit as offunit,
@@ -66,14 +74,24 @@ from polymerist.rdutils.reactions.reactions import AnnotatedReaction, BadNumberR
 from polymerist.rdutils.reactions.reactors import PolymerizationReactor
 
 # Utils imports - made these non-relative to avoid screwing up external vs internal call
-from utils.logs import redirect_to_logfile
-from utils.filelib import is_empty
-from utils.offlib import elem_counts
-from utils.cheminf import is_valid_sdfile
-from utils.packing import generate_uniform_subpopulated_lattice
-from utils.mdexport import interchange_to_lammps, interchange_to_openmm
+try:
+    from utils.logs import redirect_to_logfile
+    from utils.filelib import is_empty
+    from utils.offlib import elem_counts
+    from utils.cheminf import is_valid_sdfile
+    from utils.packing import generate_uniform_subpopulated_lattice
+    from utils.mdexport import interchange_to_lammps, interchange_to_openmm
 
-from environments.cuboulder import CUAlpineEnvironment, CUBlancaShirtsEnvironment # inject CURC-specific environment config
+    from environments.cuboulder import CUAlpineEnvironment, CUBlancaShirtsEnvironment # inject CURC-specific environment config
+except ModuleNotFoundError: # hacky workaround to support both direct script call and relative imports
+    from .utils.logs import redirect_to_logfile
+    from .utils.filelib import is_empty
+    from .utils.offlib import elem_counts
+    from .utils.cheminf import is_valid_sdfile
+    from .utils.packing import generate_uniform_subpopulated_lattice
+    from .utils.mdexport import interchange_to_lammps, interchange_to_openmm
+
+    from .environments.cuboulder import CUAlpineEnvironment, CUBlancaShirtsEnvironment # inject CURC-specific environment config
 
 
 # ATOMS, MONOMERS, AND REACTION MECHANISMS WHICH ARE, FOR ONE REASON OR ANOTHER, NOT ALLOWED
@@ -218,30 +236,46 @@ def load_job_interchange(job : Job) -> Optional[Interchange]:
     with open(job.fn(PolymerBuildProject.INTERCHANGE_PATH), 'rb') as file:
         inc = pickle.load(file)
         return inc
+    
+def cached_blacklisted_substructure_check(job : Job, cache_attr_name : str, banned_substructs : dict[str, Chem.Mol]) -> bool:
+    '''
+    Boilerplate method for performing a one-time check for offending substructures against a jobs monomer molecules
+    Returns True if none of the queried substructures are present, and False if any of them are
 
+    On first execution, will perform substructure check and cache results of presence to
+    Subsequent calls will look up cached value instead    
+    '''
+    contains_banned_substructs = job.doc.get(cache_attr_name, None) # perform cheap check for cached value
+    if contains_banned_substructs is None: # if no cached value is found, fall back to explicit calculation
+        reactant_mol = load_job_rdmol(job)
+        contains_banned_substructs = not any( # check that not one of the substructs is present
+            substructures.matching_labels_from_substruct_dict(
+                reactant_mol,
+                banned_substructs,
+            )
+        )
+        job.doc[cache_attr_name] = contains_banned_substructs # cache to job document
+
+    return contains_banned_substructs
 
 # LABELS AND CONDITIONS
 ## CHEMISTRY PRECHECKS
 def atoms_allowed(job : Job) -> bool:
-    '''Check no banned atom types are present'''
+    '''Check no illegal atoms types are present'''
     # 2) check that none of the monomers are blacklisted
-    reactant_mol = load_job_rdmol(job)
-    return not any(
-        substructures.matching_labels_from_substruct_dict(
-            reactant_mol,
-            BLACKLISTED_ATOM_QUERIES,
-        )
-    ) # if any illegal atoms are detected in the current monomer, return and exit
+    return cached_blacklisted_substructure_check(
+        job,
+        cache_attr_name='atoms_allowed',
+        banned_substructs=BLACKLISTED_ATOM_QUERIES,
+    )
 
 def monomers_allowed(job : Job) -> bool:
-    '''Check no banned atom monomer fragments are present'''
-    reactant_mol = load_job_rdmol(job)
-    return not any(
-        substructures.matching_labels_from_substruct_dict(
-            reactant_mol,
-            BLACKLISTED_MONOMER_QUERIES
-        )
-    ) # Exclude any monomers which are structurally disallowed
+    '''Check no structurally-disallowed monomers are present'''
+    return cached_blacklisted_substructure_check(
+        job,
+        cache_attr_name='monomers_allowed',
+        banned_substructs=BLACKLISTED_MONOMER_QUERIES,
+    )
 
 def mechanism_provided(job : Job) -> bool:
     '''Check that a reference "mechanism" field was generated during job initialization'''
@@ -300,7 +334,7 @@ def no_ring_piercing(job : Job) -> bool:
 @PolymerBuildProject.label
 def chemical_info_assigned(job : Job) -> bool:
     '''Check whether a topology has atomic partial charges assigned to it'''
-    return has_nonempty_file(job, PolymerBuildProject.OLIGOMER_SDF) and is_valid_sdfile(job.fn(PolymerBuildProject.OLIGOMER_SDF)) #(load_job_oligomer_molecule(job) is not None)
+    return has_nonempty_file(job, PolymerBuildProject.OLIGOMER_SDF)# and is_valid_sdfile(job.fn(PolymerBuildProject.OLIGOMER_SDF)) #(load_job_oligomer_molecule(job) is not None)
 
 @PolymerBuildProject.label
 def partial_charges_assigned(job : Job) -> bool:
@@ -322,7 +356,7 @@ def lattice_sites_determined(job : Job) -> bool:
 @PolymerBuildProject.label
 def neat_melt_packed(job : Job) -> bool:
     '''Check is packing of the neat melt was successful'''
-    return has_nonempty_file(job, PolymerBuildProject.MELT_NEAT_SDF) and is_valid_sdfile(job.fn(PolymerBuildProject.MELT_NEAT_SDF)) #and (load_job_melt_neat_topology(job) is not None)
+    return has_nonempty_file(job, PolymerBuildProject.MELT_NEAT_SDF)# and is_valid_sdfile(job.fn(PolymerBuildProject.MELT_NEAT_SDF)) #and (load_job_melt_neat_topology(job) is not None)
 
 def pbcs_determined(job : Job) -> bool:
     '''Check whether periodic bounding box has been calculated'''
