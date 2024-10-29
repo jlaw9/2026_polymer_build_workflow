@@ -750,7 +750,6 @@ def exported_to_openmm(job : Job) -> bool:
 @everything
 @md_export
 @PolymerBuildProject.pre(has_interchange)
-@PolymerBuildProject.pre.never
 @PolymerBuildProject.post(exported_to_openmm)
 @PolymerBuildProject.operation(directives={'walltime' : 15/60, 'np' : 1})
 def export_openmm_files(job : Job) -> None:
