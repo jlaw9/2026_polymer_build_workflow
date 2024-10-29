@@ -78,19 +78,15 @@ try:
     from utils.logs import redirect_to_logfile
     from utils.filelib import is_empty
     from utils.offlib import elem_counts
-    from utils.cheminf import is_valid_sdfile
     from utils.packing import generate_uniform_subpopulated_lattice
     from utils.mdexport import interchange_to_lammps, interchange_to_openmm
-
     from environments.cuboulder import CUAlpineEnvironment, CUBlancaShirtsEnvironment # inject CURC-specific environment config
 except ModuleNotFoundError: # hacky workaround to support both direct script call and relative imports
     from .utils.logs import redirect_to_logfile
     from .utils.filelib import is_empty
     from .utils.offlib import elem_counts
-    from .utils.cheminf import is_valid_sdfile
     from .utils.packing import generate_uniform_subpopulated_lattice
     from .utils.mdexport import interchange_to_lammps, interchange_to_openmm
-
     from .environments.cuboulder import CUAlpineEnvironment, CUBlancaShirtsEnvironment # inject CURC-specific environment config
 
 
