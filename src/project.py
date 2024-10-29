@@ -339,14 +339,7 @@ def chemical_info_assigned(job : Job) -> bool:
 @PolymerBuildProject.label
 def partial_charges_assigned(job : Job) -> bool:
     '''Check whether a topology has atomic partial charges assigned to it'''
-    if not chemical_info_assigned(job):
-        return False
-    
-    offmol = load_job_oligomer_molecule(job)
-    if offmol is None:
-        return False # TOSELF: the above check may make this redundant - further testing needed
-    
-    return offmol.partial_charges is not None
+    return 'partial_charges' in job.data
 
 ## LATTICE SIZING AND PACKING
 def lattice_sites_determined(job : Job) -> bool:
@@ -561,6 +554,11 @@ def assign_partial_charges(job : Job) -> None:
         cmol = charger.charge_molecule(offmol)
         topology.topology_to_sdf(job.fn(PolymerBuildProject.OLIGOMER_SDF), cmol.to_topology())
 
+        # cache partial charge data to job records
+        pcharge_unit : OFFUnit = cmol.partial_charges.units
+        job.data.partial_charges = cmol.partial_charges.m_as(pcharge_unit)
+        job.doc.pcharge_units = f'{pcharge_unit:simple}' # convert to string with explicit formatting to allow recovery of Unit type from text
+
 # 3) PACK LATTICE
 pack_lattice = PolymerBuildProject.make_group(name='pack_lattice') 
 
@@ -585,6 +583,7 @@ def determine_lattice_sites(job : Job) -> None:
 
 @everything
 @pack_lattice
+@PolymerBuildProject.pre(chemical_info_assigned)
 @PolymerBuildProject.pre(partial_charges_assigned)
 @PolymerBuildProject.pre(lattice_sites_determined)
 @PolymerBuildProject.post(neat_melt_packed)
@@ -644,6 +643,7 @@ to_interchange = PolymerBuildProject.make_group(name='to_interchange')
 
 @everything
 @to_interchange
+@PolymerBuildProject.pre(chemical_info_assigned)
 @PolymerBuildProject.pre(partial_charges_assigned)
 @PolymerBuildProject.pre(neat_melt_packed)
 @PolymerBuildProject.pre(pbcs_determined)
@@ -701,7 +701,7 @@ md_export = PolymerBuildProject.make_group(name='md_export')
 
 ## LAMMPS versions
 @PolymerBuildProject.label
-def exported_to_LAMMPS(job : Job) -> bool:
+def exported_to_lammps(job : Job) -> bool:
     '''Check if LAMMPS files have been generated'''
     return all(
         has_nonempty_file(job, lmp_file)
@@ -711,9 +711,9 @@ def exported_to_LAMMPS(job : Job) -> bool:
 @everything
 @md_export
 @PolymerBuildProject.pre(has_interchange)
-@PolymerBuildProject.post(exported_to_LAMMPS)
+@PolymerBuildProject.post(exported_to_lammps)
 @PolymerBuildProject.operation(directives={'walltime' : 10/60, 'np' : 1})
-def export_LAMMPS_files(job : Job) -> None:
+def export_lammps_files(job : Job) -> None:
     '''Write LAMMPS data and input files for the melt topology'''
     interchange = load_job_interchange(job)
     Path(job.fn(PolymerBuildProject.LAMMPS_DIR)).mkdir(exist_ok=True) # ensure the child directory exists
@@ -730,7 +730,7 @@ def export_LAMMPS_files(job : Job) -> None:
 
 @everything
 @md_export
-@PolymerBuildProject.pre(exported_to_LAMMPS)
+@PolymerBuildProject.pre(exported_to_lammps)
 @PolymerBuildProject.pre.never
 @PolymerBuildProject.post.isfile(f'energies_LAMMPS.json')
 @PolymerBuildProject.operation(directives={'walltime' : 5/60, 'np' : 1})
@@ -740,7 +740,7 @@ def evaluate_energies_LAMMPS(job : Job) -> None:
 
 ## OpenMM versions
 @PolymerBuildProject.label
-def exported_to_OpenMM(job : Job) -> bool:
+def exported_to_openmm(job : Job) -> bool:
     '''Check if OpenMM files have been generated'''
     return all(
         has_nonempty_file(job, lmp_file)
@@ -751,9 +751,9 @@ def exported_to_OpenMM(job : Job) -> bool:
 @md_export
 @PolymerBuildProject.pre(has_interchange)
 @PolymerBuildProject.pre.never
-@PolymerBuildProject.post(exported_to_OpenMM)
+@PolymerBuildProject.post(exported_to_openmm)
 @PolymerBuildProject.operation(directives={'walltime' : 15/60, 'np' : 1})
-def export_OpenMM_files(job : Job) -> None:
+def export_openmm_files(job : Job) -> None:
     '''Write OpenMM data and input files for the melt topology'''
     interchange = load_job_interchange(job)
     Path(job.fn(PolymerBuildProject.OPENMM_DIR)).mkdir(exist_ok=True) # ensure the child directory exists
@@ -773,11 +773,11 @@ def export_OpenMM_files(job : Job) -> None:
 
 @everything
 @md_export
-@PolymerBuildProject.pre(exported_to_LAMMPS)
+@PolymerBuildProject.pre(exported_to_lammps)
 @PolymerBuildProject.pre.never
 @PolymerBuildProject.post.isfile(f'energies_OpenMM.json')
 @PolymerBuildProject.operation(directives={'walltime' : 5/60, 'np' : 1})
-def evaluate_energies_OpenMM(job : Job) -> None:
+def evaluate_energies_openmm(job : Job) -> None:
     '''Evaluate starting structure energies of OpenMM MD files'''
     ...
 
