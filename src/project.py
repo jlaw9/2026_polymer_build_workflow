@@ -9,7 +9,7 @@ from argparse import ArgumentParser, Namespace, REMAINDER
 
 from typing import ClassVar, Optional
 
-import pickle
+import pickle, json
 from functools import partial
 from pathlib import Path
 from string import ascii_uppercase
@@ -46,9 +46,14 @@ from openff.interchange import Interchange
 from rdkit import Chem
 
 # OpenMM imports
-from openmm.unit import Quantity as OMMQuantity
 from openmm import VerletIntegrator
-from openmm.unit import femtosecond
+from openmm import Context, XmlSerializer
+
+from openmm.unit import (
+    Quantity as OMMQuantity,
+    Unit as OMMUnit,
+)
+from openmm.unit import femtosecond, kilojoule_per_mole
 
 # Signac imports
 from signac.job import Job
@@ -68,6 +73,10 @@ from polymerist.polymers.building import build_linear_polymer, mbmol_to_openmm_p
 from polymerist.mdtools.openfftools import topology, boxvectors
 from polymerist.mdtools.openfftools.partition import partition
 from polymerist.mdtools.openfftools.partialcharge.molchargers import MolCharger
+
+from polymerist.mdtools.openmmtools.serialization import apply_state_to_context
+from polymerist.mdtools.openmmtools.evaluation import eval_openmm_energies_separated
+from polymerist.mdtools.lammpstools.lammpseval import get_lammps_energies
 
 from polymerist.rdutils.rdcoords.tiling import rdmol_effective_radius
 from polymerist.rdutils.reactions.reactions import AnnotatedReaction, BadNumberReactants
@@ -123,6 +132,7 @@ class PolymerBuildProject(FlowProject):
     QUANTITY_PRECISION  : ClassVar[int] = 4 # number of decimal place to report Quantities to when printing/logging
     RELAXED_STEREO      : ClassVar[bool] = True
     LOGLEVEL            : int = logging.INFO
+    ENERGY_UNIT         : OMMUnit = kilojoule_per_mole 
 
     # PROJECT-WIDE FILE NAMES
     ## STRUCTURE FILES
@@ -141,6 +151,7 @@ class PolymerBuildProject(FlowProject):
         LAMMPS_INPUT_PATH,
         LAMMPS_DATA_PATH,
     )
+    LAMMPS_ENERGIES     : ClassVar[str] = f'{LAMMPS_DIR}/energies_lammps.json' # NOTE: deliberately NOT be lumped w/ MD input files
 
     ## OpenMM
     OPENMM_DIR          : ClassVar[str] = 'OpenMM'
@@ -154,6 +165,7 @@ class PolymerBuildProject(FlowProject):
         OPENMM_TOPO_PATH,
         OPENMM_INTEG_PATH,
     )
+    OPENMM_ENERGIES     : ClassVar[str] = f'{OPENMM_DIR}/energies_openmm.json' # NOTE: deliberately NOT be lumped w/ MD input files
 
 
 # PROJECT SPECIFIC JOB HELPER FUNCTIONS
@@ -233,6 +245,20 @@ def load_job_interchange(job : Job) -> Optional[Interchange]:
         inc = pickle.load(file)
         return inc
     
+def load_job_openmm_context(job : Job) -> Context:
+    '''Load a complete OpenMM Context from saved System, State, and Integrator'''
+    with open(job.fn(PolymerBuildProject.OPENMM_SYSTEM_PATH), 'r') as sys_file, \
+        open(job.fn(PolymerBuildProject.OPENMM_STATE_PATH ), 'r') as state_file, \
+        open(job.fn(PolymerBuildProject.OPENMM_INTEG_PATH ), 'r') as integ_file:
+        system = XmlSerializer.deserialize(sys_file.read())
+        state = XmlSerializer.deserialize(state_file.read())
+        integrator = XmlSerializer.deserialize(integ_file.read())
+
+    context = Context(system, integrator)
+    apply_state_to_context(context, state)
+
+    return context
+    
 def cached_blacklisted_substructure_check(job : Job, cache_attr_name : str, banned_substructs : dict[str, Chem.Mol]) -> bool:
     '''
     Boilerplate method for performing a one-time check for offending substructures against a jobs monomer molecules
@@ -253,6 +279,7 @@ def cached_blacklisted_substructure_check(job : Job, cache_attr_name : str, bann
         job.doc[cache_attr_name] = contains_banned_substructs # cache to job document
 
     return contains_banned_substructs
+
 
 # LABELS AND CONDITIONS
 ## CHEMISTRY PRECHECKS
@@ -704,6 +731,11 @@ def exported_to_lammps(job : Job) -> bool:
             for lmp_file in PolymerBuildProject.LAMMPS_PATHS
     )
 
+@PolymerBuildProject.label
+def energies_evaluated_lammps(job : Job) -> bool:
+    '''Check if LAMMPS energy evaluation has been performed'''
+    return has_nonempty_file(job, PolymerBuildProject.LAMMPS_ENERGIES)
+
 @everything
 @md_export
 @PolymerBuildProject.pre(has_interchange)
@@ -727,12 +759,34 @@ def export_lammps_files(job : Job) -> None:
 @everything
 @md_export
 @PolymerBuildProject.pre(exported_to_lammps)
-@PolymerBuildProject.pre.never
-@PolymerBuildProject.post.isfile(f'energies_LAMMPS.json')
+@PolymerBuildProject.post(energies_evaluated_lammps)
 @PolymerBuildProject.operation(directives={'walltime' : 5/60, 'np' : 1})
 def evaluate_energies_LAMMPS(job : Job) -> None:
     '''Evaluate starting structure energies of LAMMPS MD files'''
-    ...
+    LMP_ARGS = ["-screen", "none", "-log", "none"] # blocks stdout and log.lammps writes to avoid clutter
+    with redirect_job_to_logfile(job) as logger:
+        with job: # need this context to make relative path work
+            energies_lmp_raw = get_lammps_energies(
+                job.fn(PolymerBuildProject.LAMMPS_INPUT_PATH),
+                preferred_unit=PolymerBuildProject.ENERGY_UNIT,
+                cmdargs=LMP_ARGS,
+            )
+        logger.info('Completed energy evaluation from LAMMPS input files')
+
+        energies_lmp = { # reformat and combine into standard form
+            'Potential' : energies_lmp_raw['Potential'],
+            'Bond'      : energies_lmp_raw['Bond'],
+            'Angle'     : energies_lmp_raw['Angle'],
+            'Dihedral'  : energies_lmp_raw['Proper Torsion'] + energies_lmp_raw['Improper Torsion'],
+            'vdW'       : energies_lmp_raw['vdW'] + energies_lmp_raw['Dispersion'],
+            'Coulomb'   : energies_lmp_raw['Coulomb Short'] + energies_lmp_raw['Coulomb Long'],
+        }
+        energies_lmp_stringy = {e_name : f'{e_val!s}' for e_name, e_val in energies_lmp.items()} # stringify for JSON serialization
+        logger.info('Reformatted LAMMPS energy output')
+        
+        with open(job.fn(PolymerBuildProject.LAMMPS_ENERGIES), 'w') as energies_lmp_file:
+            json.dump(energies_lmp_stringy, energies_lmp_file, indent=4)
+        logger.info('LAMMPS energy output saved to file')
 
 ## OpenMM versions
 @PolymerBuildProject.label
@@ -742,6 +796,11 @@ def exported_to_openmm(job : Job) -> bool:
         has_nonempty_file(job, lmp_file)
             for lmp_file in PolymerBuildProject.OPENMM_PATHS
     )
+
+@PolymerBuildProject.label
+def energies_evaluated_openmm(job : Job) -> bool:
+    '''Check if OpenMM energy evaluation has been performed'''
+    return has_nonempty_file(job, PolymerBuildProject.OPENMM_ENERGIES)
 
 @everything
 @md_export
@@ -769,12 +828,34 @@ def export_openmm_files(job : Job) -> None:
 @everything
 @md_export
 @PolymerBuildProject.pre(exported_to_lammps)
-@PolymerBuildProject.pre.never
-@PolymerBuildProject.post.isfile(f'energies_OpenMM.json')
+@PolymerBuildProject.post(energies_evaluated_openmm)
 @PolymerBuildProject.operation(directives={'walltime' : 5/60, 'np' : 1})
 def evaluate_energies_openmm(job : Job) -> None:
     '''Evaluate starting structure energies of OpenMM MD files'''
-    ...
+    context = load_job_openmm_context(job)
+    with redirect_job_to_logfile(job) as logger:
+        omm_pot, omm_kin = eval_openmm_energies_separated(context, preferred_unit=PolymerBuildProject.ENERGY_UNIT)
+        # TODO: validate kinetic energies/check nullity
+        logger.info('Completed energy evaluation from OpenMM Context')
+
+        omm_pot_raw = {
+            e_name.removesuffix(' potential energy').removesuffix(' force') : e_val
+                for e_name, e_val in omm_pot.items()
+        }
+        energies_omm = {
+            'Potential' : omm_pot_raw['Total'],
+            'Bond'      : omm_pot_raw['HarmonicBondForce'],
+            'Angle'     : omm_pot_raw['HarmonicAngleForce'],
+            'Dihedral'  : omm_pot_raw['PeriodicTorsionForce'],
+            'vdW'       : omm_pot_raw['vdW'] + omm_pot_raw['vdW 1-4'],
+            'Coulomb'   : omm_pot_raw['Electrostatics'] + omm_pot_raw['Electrostatics 1-4'],
+        }
+        energies_omm_stringy = {e_name : f'{e_val!s}' for e_name, e_val in energies_omm.items()} # stringify for JSON serialization
+        logger.info('Reformatted OpenMM energy output')
+        
+        with open(job.fn(PolymerBuildProject.OPENMM_ENERGIES), 'w') as energies_omm_file:
+            json.dump(energies_omm_stringy, energies_omm_file, indent=4)
+        logger.info('OpenMM energy output saved to file')
 
 
 # enabling CLI interaction
