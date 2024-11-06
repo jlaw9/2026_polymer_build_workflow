@@ -1,0 +1,143 @@
+'''Initialize statepoint directories for PolyID Signac workflow'''
+
+from typing import Optional
+from argparse import ArgumentParser, Namespace
+
+import numpy as np
+import pandas as pd
+
+from collections import defaultdict
+from pathlib import Path
+
+from signac import init_project
+
+# Internal utilities
+try: # call as python module
+    from . import _parent_dir
+    from .parameters import ParametersSwept, PARAMS_SWEPT_PATH 
+    from .parameters import ParametersConfig, PARAMS_CONFIG_PATH
+
+    from .utils.filelib import validate_file_path
+    from .utils.dataIO import read_monomer_data
+    from .utils.datafmt import parse_field_names_and_roles
+    from .utils.containers import cartesian_grid
+except ImportError: # call as script file    
+    from __init__ import _parent_dir
+    from parameters import ParametersSwept, PARAMS_SWEPT_PATH 
+    from parameters import ParametersConfig, PARAMS_CONFIG_PATH
+
+    from utils.filelib import validate_file_path
+    from utils.dataIO import read_monomer_data
+    from utils.datafmt import parse_field_names_and_roles
+    from utils.containers import cartesian_grid
+
+
+# Helper functions
+def read_monomer_dataframe(
+        mono_data_path : Path,
+        number_to_sample : Optional[int]=None,
+        random : bool=False
+    ) -> pd.DataFrame:
+    '''Read and subselect monomer data fields according to provided read parameters'''
+    monomer_df = read_monomer_data([mono_data_path])[0] # take first of one as THE dataframe
+    monomer_df.set_index(monomer_df.columns[0], inplace=True) # alternative to index_cols arg in read function
+    monomer_df.replace(np.nan, None, inplace=True) # convert NaN values to JSON-serializable NoneType
+    
+    if number_to_sample is not None:
+        if random:
+            monomer_df = monomer_df.sample(number_to_sample)
+        else:
+            monomer_df = monomer_df.head(min(number_to_sample, len(monomer_df)))
+
+    return monomer_df
+
+def generate_statepoints(args : Namespace) -> None:
+    '''Initialize project directory and job statepoint files for chosen monomer data fields'''
+    # load monomer data and 
+    monomer_df = read_monomer_dataframe(
+        args.monomer_data,
+        number_to_sample=args.number_to_sample,
+        random=args.random
+    )
+
+    validate_file_path(args.parameters_config, check_missing=True, check_has_extension=True, valid_extensions=('.json',))
+    params_config = ParametersConfig.from_file(args.parameters_config).__dict__
+
+    validate_file_path(args.parameters_swept, check_missing=True, check_has_extension=True, valid_extensions=('.json',))
+    params_swept = ParametersSwept.from_file(args.parameters_swept).__dict__
+
+    # create signac project directory and populate data into statepoints
+    project_path = (args.output_dir / args.project_name).resolve()
+    validate_file_path(project_path, check_already_exists=True)
+    project = init_project(args.project_name)
+
+    field_name, field_role = parse_field_names_and_roles(monomer_df)
+    for _, row in monomer_df.iterrows():
+        # divvy up values according to field role
+        rowdata = defaultdict(dict)
+        for field, value in row.items():
+            rowdata[field_role[field]][field_name[field]] = value
+
+        # generate job statepoints and metadata, inject shared state parameters as needed
+        for param_combo in cartesian_grid(params_swept):
+            statepoint = {**rowdata['statedata'], **param_combo, **params_config} # mix together statepoint parameters from all sources
+            metadata   = {**rowdata['metadata']} # shunt accessory data from training set to document
+
+            job = project.open_job(statepoint=statepoint)
+            job.document = metadata
+
+
+def main() -> None:
+    parser = ArgumentParser()
+    parser.add_argument(
+        '-mdat',
+        '--monomer-data',
+        type=Path,
+        required=True,
+        help='Path to the (formatted) monomer database file to draw records from',
+    )
+    parser.add_argument(
+        '-num',
+        '--number-to-sample',
+        type=int,
+        help='Optional number of records to subsample from the dataset, if the full dataset is not desired',
+    )
+    parser.add_argument(
+        '-rand',
+        '--random',
+        action='store_true',
+        help='When --number-to-sample is set, dictates whether the subsample should be the first N (default) or a random sample of N',
+    )
+    parser.add_argument(
+        '-pconfig',
+        '--parameters_config',
+        type=Path,
+        default=PARAMS_CONFIG_PATH,
+        help='Path to a JSON file containing shared configuration parameters for project jobs',
+    )
+    parser.add_argument(
+        '-pswept',
+        '--parameters_swept',
+        type=Path,
+        default=PARAMS_SWEPT_PATH,
+        help='Path to a JSON file containing varying design parameters for project jobs',
+    )
+    parser.add_argument(
+        '-proj',
+        '--project-name',
+        required=True,
+        help='The toplevel name of the Signac project to be initialized',
+    )
+    parser.add_argument(
+        '-od',
+        '--output-dir',
+        type=Path,
+        default=_parent_dir,
+        help='The directory inside which the Signac project should be initialized'
+    )
+
+    args = parser.parse_args()
+    generate_statepoints(args)
+
+if __name__ == '__main__':
+    main()

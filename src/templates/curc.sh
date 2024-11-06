@@ -1,0 +1,31 @@
+{% extends "slurm.sh" %}
+
+{% block header %}
+    {{- super () -}}
+    {% if gres %}
+#SBATCH --gres={{ gres }}
+    {% endif %}
+    {% if qos %}
+#SBATCH --qos={{ qos }}
+    {% endif %}
+    {% if account %}
+#SBATCH --account={{ account }}
+    {% endif %}
+    {% if mail_user and mail_type != "NONE" %}
+#SBATCH --mail_user={{ mail_user }}
+#SBATCH --mail_type={{ mail_type }}
+    {% endif %}
+{% endblock header %}
+{% block custom_content %}
+{#
+    This block is not used by any other template and can be safely modified
+    without the need to call super(). We recommend most additions to the
+    templates go here if they are not direct changes to an existing template.
+
+    For example, commands like `module load ...` or printing diagnostic
+    information from the scheduler can be done in this block.
+#}
+{% endblock custom_content %}
+{% block body %}
+    {{- super () -}}
+{% endblock body %}
