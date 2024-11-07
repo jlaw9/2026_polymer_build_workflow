@@ -3,9 +3,12 @@ The structure of a polymer building project workflow,
 including a shared namespace, labels, conditions, and operations
 '''
 
-import sys
 import logging
-from argparse import ArgumentParser, Namespace, REMAINDER
+import warnings
+warnings.catch_warnings(record=True)
+
+import sys
+from argparse import ArgumentParser, Namespace
 
 from typing import ClassVar, Optional
 
@@ -26,6 +29,7 @@ from openff.toolkit.utils.exceptions import (
     ToolkitUnavailableException,
 )
 logging.getLogger('openff.toolkit.typing.engines.smirnoff.parameters').setLevel(logging.CRITICAL) # silence annoying Electrostatics up-conversion INFO logs
+warnings.filterwarnings('ignore', category=IncorrectNumConformersWarning) # silence annoying Conformers warning from Espaloma
 
 from openff.toolkit.utils.toolkits import GLOBAL_TOOLKIT_REGISTRY, OpenEyeToolkitWrapper
 try: # attempt to deregister OpenEye toolkit
@@ -46,14 +50,14 @@ from openff.interchange import Interchange
 from rdkit import Chem
 
 # OpenMM imports
-from openmm import VerletIntegrator
+from openmm import LangevinMiddleIntegrator
 from openmm import Context, XmlSerializer
 
 from openmm.unit import (
     Quantity as OMMQuantity,
     Unit as OMMUnit,
 )
-from openmm.unit import femtosecond, kilojoule_per_mole
+from openmm.unit import femtosecond, picosecond, kelvin, kilojoule_per_mole
 
 # Signac imports
 from signac.job import Job
@@ -813,7 +817,7 @@ def export_openmm_files(job : Job) -> None:
     Path(job.fn(PolymerBuildProject.OPENMM_DIR)).mkdir(exist_ok=True) # ensure the child directory exists
 
     with redirect_job_to_logfile(job) as logger:
-        integrator = VerletIntegrator(1*femtosecond) # hard-coded Intergrator now, will add support for more targetted integrator later
+        integrator = LangevinMiddleIntegrator(300*kelvin, 1*picosecond**-1, 1*femtosecond) # hard-coded Intergrator now, will add support for more targetted integrator later
         logger.info('Writing OpenMM topology, system, state, and integrator files')
         interchange_to_openmm(
             interchange=interchange,
@@ -835,8 +839,12 @@ def evaluate_energies_openmm(job : Job) -> None:
     context = load_job_openmm_context(job)
     with redirect_job_to_logfile(job) as logger:
         omm_pot, omm_kin = eval_openmm_energies_separated(context, preferred_unit=PolymerBuildProject.ENERGY_UNIT)
-        # TODO: validate kinetic energies/check nullity
         logger.info('Completed energy evaluation from OpenMM Context')
+        
+        KE_total = omm_kin['Total kinetic energy']
+        if KE_total != 0.0*PolymerBuildProject.ENERGY_UNIT:
+            logger.error(f'Unexpected nonzero KE evaluated ({KE_total!s})')
+            return
 
         omm_pot_raw = {
             e_name.removesuffix(' potential energy').removesuffix(' force') : e_val
