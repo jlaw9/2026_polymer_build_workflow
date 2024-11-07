@@ -6,4 +6,5 @@ PROJDIR='polyID_test'
 # python src/project.py -path $PROJDIR status --detailed --pretty
 
 # Send all project jobs to the Cluster
-python src/project.py -path $PROJDIR submit --parallel --partition blanca-shirts -o everything --job-output dumps.out # --pretend
+# python src/project.py -path $PROJDIR submit --parallel --partition blanca-shirts -o everything --job-output dumps.out # --pretend # Shirts Blanca nodes
+python src/project.py -path polyID_test submit --parallel -o everything --partition amilan --account ucb576_asc1 --job-output dumps.out # Alpine allocation
