@@ -67,6 +67,7 @@ from flow import FlowProject
 import polymerist as ps
 from polymerist.genutils.importutils import submodule_loggers
 POLYMERIST_LOGGERS = [logger for logger in submodule_loggers(ps).values() if logger is not None] # TODO: move this into polymerist?
+from polymerist.genutils.logutils.IOHandlers import get_active_loggers
 
 from polymerist.unitutils.interop import openmm_to_openff
 from polymerist.smileslib import substructures
@@ -179,7 +180,8 @@ def redirect_job_to_logfile(job : Job) -> logging.Logger:
         logfile_path=job.fn(PolymerBuildProject.LOGFILE_NAME),
         logger_name=job.id,
         level=PolymerBuildProject.LOGLEVEL,
-        aux_loggers=POLYMERIST_LOGGERS # make this all loggers?
+        aux_loggers=POLYMERIST_LOGGERS, # make this all loggers?
+        # aux_loggers=get_active_loggers(), # get EVERY active logger registered across all Python modules
     )
 
 def has_nonempty_file(job : Job, filename : str) -> bool:
@@ -898,6 +900,10 @@ def main() -> None:
     # configure global vars in Project definition and initialize project instance
     PolymerBuildProject.QUANTITY_PRECISION = start_args.quantity_precision
     PolymerBuildProject.RELAXED_STEREO = not start_args.strict_stereo
+    # PolymerBuildProject.LOGLEVEL = ...
+    logging.basicConfig(level=PolymerBuildProject.LOGLEVEL)
+    print(logging.root.level)
+
     new_project = PolymerBuildProject(
         path=start_args.project_path,
         entrypoint={
