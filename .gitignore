@@ -18,7 +18,7 @@ import_times.*
 openmm_testing.ipynb
 
 # source data for polymer build jobs
-# src/monomer_data
+src/monomer_data
 src/reactions
 src/parameters
 
