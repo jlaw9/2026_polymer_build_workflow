@@ -15,6 +15,7 @@ src/monomer_data/subsample_NIPU.csv
 # debug files
 imports_for_profiling.py
 import_times.*
+openmm_testing.ipynb
 
 # source data for polymer build jobs
 # src/monomer_data
@@ -24,6 +25,8 @@ src/parameters
 # testing dirs
 sdf_testing/*
 energy_tables/*
+openmm_test/*
+
 polyid_test/*
 polyid_scale/*
 polyid_scale_completed/*
