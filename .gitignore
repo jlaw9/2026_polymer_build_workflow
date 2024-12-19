@@ -27,6 +27,8 @@ sdf_testing/*
 energy_tables/*
 openmm_test/*
 
+polymer_benchmark/*
+
 polyid_test/*
 polyid_scale/*
 polyid_scale_completed/*
