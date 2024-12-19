@@ -22,12 +22,15 @@ src/monomer_data
 src/reactions
 src/parameters
 
+# becnhmarks and profiling
+profile.csv
+inc_times.csv
+polymer_benchmark/**/*
+
 # testing dirs
 sdf_testing/*
 energy_tables/*
 openmm_test/*
-
-polymer_benchmark/*
 
 polyid_test/*
 polyid_scale/*
