@@ -25,6 +25,9 @@ src/parameters
 # becnhmarks and profiling
 profile.csv
 inc_times.csv
+
+benchmark_data/*
+polymer_benchmark/*
 polymer_benchmark/**/*
 
 # testing dirs
