@@ -137,7 +137,7 @@ def main() -> None:
 
     input_parser.add_argument( 
         '-rxns',
-        '--rxn_mapping-path',
+        '--rxn-mapping-path',
         type=Path,
         required=True,
         help='The path to a JSON file containing a reaction name mapping\n' \
