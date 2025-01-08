@@ -38,6 +38,7 @@ class ParametersSwept:
 class ParametersConfig:
     '''Encapsulation class for tracking fixed configuration parameters that shouldn't be changed'''
     forcefield              : str
+    copolymer_sequence      : str
     minimize_oligomer       : bool
     use_switching_function  : bool = False
     switch_width_nm         : float = 0.1
@@ -66,6 +67,7 @@ if __name__ == '__main__':
 
     params_config = ParametersConfig( # shared default parameters that we don't expect to have to sweep through
         forcefield='openff_unconstrained-2.0.0.offxml', # 'openff-2.0.0.offxml',
+        copolymer_sequence='BA',  # sequence of middle monomers AFTER head group (i.e. |A-[BA]n-B|)
         minimize_oligomer=True,
         use_switching_function=False,
         switch_width_nm=0.1,
