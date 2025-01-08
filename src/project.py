@@ -65,11 +65,14 @@ from flow import FlowProject
 
 # Custom (polymerist) imports
 import polymerist as ps
-from polymerist.genutils.importutils import submodule_loggers
-POLYMERIST_LOGGERS = [logger for logger in submodule_loggers(ps).values() if logger is not None] # TODO: move this into polymerist?
-from polymerist.genutils.logutils.IOHandlers import get_active_loggers
+from polymerist.genutils.logutils.IOHandlers import submodule_loggers, get_active_loggers
+POLYMERIST_LOGGERS = [
+    logger
+        for logger in submodule_loggers(ps).values()
+            if (logger is not None) and (not isinstance(logger, logging.PlaceHolder))
+] # TODO: move this into polymerist?
+print(POLYMERIST_LOGGERS)
 
-from polymerist.unitutils.interop import openmm_to_openff
 from polymerist.smileslib import substructures
 
 from polymerist.polymers.monomers import MonomerGroup, specification
@@ -77,6 +80,7 @@ from polymerist.polymers.building import build_linear_polymer, mbmol_to_openmm_p
 
 from polymerist.mdtools.openfftools import topology, boxvectors
 from polymerist.mdtools.openfftools.partition import partition
+from polymerist.mdtools.openfftools.unitsys import openmm_to_openff
 from polymerist.mdtools.openfftools.partialcharge.molchargers import MolCharger
 
 from polymerist.mdtools.openmmtools.serialization import apply_state_to_context
@@ -509,7 +513,6 @@ oligomerize = PolymerBuildProject.make_group(name='oligomerize')
 @PolymerBuildProject.operation(directives={'walltime' : 15/60, 'np' : 1})
 def build_oligomer_pdb(job : Job) -> None:
     '''Generate coordinates and build oligomer PDB file using mBuild'''
-    seq = 'BA' # hard-coded for now, plan to make more flexible in the future
     monogrp = MonomerGroup.from_file(job.fn(PolymerBuildProject.FRAGMENTS_PATH))
     with redirect_job_to_logfile(job) as logger:
         # check for identical parallel oligomer jobs
@@ -525,8 +528,8 @@ def build_oligomer_pdb(job : Job) -> None:
         # generate coordinates with mBuild hook
         polymer = build_linear_polymer(
             monomers=monogrp,
-            DOP=2*(1 + (job.sp.DOP - 1)/len(seq)), # formula to convert target DOP (considering an AB pair as a repeat unit) to effective DOP in builder
-            sequence=seq,
+            n_monomers=(job.sp.DOP*len(job.sp.copolymer_sequence)), # interpret DOP here as number of monomer sequence repeats (including end groups)
+            sequence=job.sp.copolymer_sequence, # DEV: for now, fixed as "BA" for all mechanisms; TODO: find way to set this as a function of mechanism in setup
             energy_minimize=True, # TODO: add master config option for energy minimization at project level
         )
         mbmol_to_openmm_pdb(job.fn(PolymerBuildProject.OLIGOMER_PDB), polymer)
