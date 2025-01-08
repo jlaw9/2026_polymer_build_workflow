@@ -4,7 +4,8 @@ polymerist/*
 # large data directories
 polymer_*/*
 polymers_*/*
-plasticizer*/*
+plasticizer_project/**/*
+!plasticizer_project/generate_plasticizers.ipynb
 
 # testing files
 testing.ipynb
