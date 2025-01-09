@@ -2,10 +2,9 @@
 
 # Parameters
 runlevel=$1
-projname="${2:-polyID}"
-
-DATAPATH="src/monomer_data/PolyID_master_data.csv" # hard-coded for now
-OUTDIR="src" # hard-coded for now
+projname="${2:-"polyID"}"
+datapath="${3:-"src/monomer_data/PolyID_master_data.csv"}"
+outdir="${4:-"src"}"
 
 
 # internal values
@@ -15,13 +14,13 @@ FLAG_PROD="--production"
 if [[ $runlevel == $FLAG_TEST ]]; then
     echo "Initializing test project..."
     projdir="${projname}_test"
-    python -m src.init_signac -mdat $DATAPATH -num 6 --random --project-name $projdir -od $OUTDIR
+    python -m src.init_signac -mdat $datapath -num 6 --random --project-name $projdir -od $outdir
     cp -r 'src/templates' $projdir
     echo "Project directory '${projdir}' created"
 elif [[ $runlevel == $FLAG_PROD ]]; then
     echo "Initializing production-scale project..."
     projdir="${projname}_production"
-    python -m src.init_signac -mdat $DATAPATH --project-name $projdir -od $OUTDIR
+    python -m src.init_signac -mdat $datapath --project-name $projdir -od $outdir
     cp -r 'src/templates' $projdir
     echo "Project directory '${projdir}' created"
 else

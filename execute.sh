@@ -1,10 +1,10 @@
 #!/bin/bash
 
-PROJDIR='polyID_test'
+projdir=""${1:-"polyID_test"}"
 
 # Get current status of project
-# python src/project.py -path $PROJDIR status --detailed --pretty
+# python src/project.py -path $projdir status --detailed --pretty
 
 # Send all project jobs to the Cluster
-# python src/project.py -path $PROJDIR submit --parallel --partition blanca-shirts -o everything --job-output dumps.out # --pretend # Shirts Blanca nodes
+# python src/project.py -path $projdir submit --parallel --partition blanca-shirts -o everything --job-output dumps.out # --pretend # Shirts Blanca nodes
 python src/project.py -path polyID_test submit --parallel -o everything --partition amilan --account ucb576_asc1 --job-output dumps.out # Alpine allocation
