@@ -71,7 +71,6 @@ POLYMERIST_LOGGERS = [
         for logger in submodule_loggers(ps).values()
             if (logger is not None) and (not isinstance(logger, logging.PlaceHolder))
 ] # TODO: move this into polymerist?
-print(POLYMERIST_LOGGERS)
 
 from polymerist.smileslib import substructures
 
@@ -97,14 +96,14 @@ try: # call as python module
     from .utils.filelib import is_empty
     from .utils.offlib import elem_counts
     from .utils.packing import generate_uniform_subpopulated_lattice
-    from .utils.mdexport import interchange_to_lammps, interchange_to_openmm
+    from .utils.mdexport import interchange_to_openmm
     from .environments.cuboulder import CUAlpineEnvironment, CUBlancaShirtsEnvironment # inject CURC-specific environment config
 except ImportError: # call as script file
     from utils.logs import redirect_to_logfile
     from utils.filelib import is_empty
     from utils.offlib import elem_counts
     from utils.packing import generate_uniform_subpopulated_lattice
-    from utils.mdexport import interchange_to_lammps, interchange_to_openmm
+    from utils.mdexport import interchange_to_openmm
     from environments.cuboulder import CUAlpineEnvironment, CUBlancaShirtsEnvironment # inject CURC-specific environment config
 
 
@@ -730,6 +729,8 @@ def neat_melt_to_interchange(job : Job) -> None:
 
 # 5) EXPORT INTERCHANGE TO MD ENGINE FILES OF CHOICE
 md_export = PolymerBuildProject.make_group(name='md_export') 
+openmm_export = PolymerBuildProject.make_group(name='openmm_export') 
+lammps_export = PolymerBuildProject.make_group(name='lammps_export') 
 
 ## LAMMPS versions
 @PolymerBuildProject.label
@@ -747,6 +748,7 @@ def energies_evaluated_lammps(job : Job) -> bool:
 
 @everything
 @md_export
+@lammps_export
 @PolymerBuildProject.pre(has_interchange)
 @PolymerBuildProject.post(exported_to_lammps)
 @PolymerBuildProject.operation(directives={'walltime' : 10/60, 'np' : 1})
@@ -756,17 +758,19 @@ def export_lammps_files(job : Job) -> None:
     Path(job.fn(PolymerBuildProject.LAMMPS_DIR)).mkdir(exist_ok=True) # ensure the child directory exists
 
     with redirect_job_to_logfile(job) as logger:
-        logger.info('Writing LAMMPS input and data files')
-        interchange_to_lammps(
-            interchange=interchange,
-            lmp_data_path=job.fn(PolymerBuildProject.LAMMPS_DATA_PATH),
-            lmp_input_path=job.fn(PolymerBuildProject.LAMMPS_INPUT_PATH),
-            lmp_data_filestr=f'"./{PolymerBuildProject.LAMMPS_DATA_PATH}"', # make this relative for portability
+        logger.info('Writing LAMMPS data file')
+        interchange.to_lammps_datafile(job.fn(PolymerBuildProject.LAMMPS_DATA_PATH))
+        
+        logger.info('Writing LAMMPS input file')
+        interchange.to_lammps_input(
+            file_path=job.fn(PolymerBuildProject.LAMMPS_INPUT_PATH),
+            data_file=f'"./{PolymerBuildProject.LAMMPS_DATA_PATH}"', # write reference to data file relative to workspace directory
         )
         logger.info('LAMMPS files successfully written')
 
 @everything
 @md_export
+@lammps_export
 @PolymerBuildProject.pre(exported_to_lammps)
 @PolymerBuildProject.post(energies_evaluated_lammps)
 @PolymerBuildProject.operation(directives={'walltime' : 5/60, 'np' : 1})
@@ -811,8 +815,9 @@ def energies_evaluated_openmm(job : Job) -> bool:
     '''Check if OpenMM energy evaluation has been performed'''
     return has_nonempty_file(job, PolymerBuildProject.OPENMM_ENERGIES)
 
-@everything
+# @everything
 @md_export
+@openmm_export
 @PolymerBuildProject.pre(has_interchange)
 @PolymerBuildProject.post(exported_to_openmm)
 @PolymerBuildProject.operation(directives={'walltime' : 15/60, 'np' : 1})
@@ -834,8 +839,9 @@ def export_openmm_files(job : Job) -> None:
         )
         logger.info('OpenMM files successfully written')
 
-@everything
+# @everything
 @md_export
+@openmm_export
 @PolymerBuildProject.pre(exported_to_lammps)
 @PolymerBuildProject.post(energies_evaluated_openmm)
 @PolymerBuildProject.operation(directives={'walltime' : 5/60, 'np' : 1})
