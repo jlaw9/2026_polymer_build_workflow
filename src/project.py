@@ -290,17 +290,18 @@ def cached_blacklisted_substructure_check(job : Job, cache_attr_name : str, bann
     return contains_banned_substructs
 
 
-# LABELS AND CONDITIONS
-## CHEMISTRY PRECHECKS
+# OPERATIONS,  LABELS AND CONDITIONS
+everything = PolymerBuildProject.make_group(name='everything') # "master" group which allows submission of all operations
+
+## 0) CHEMISTRY VALIDATION
 def atoms_allowed(job : Job) -> bool:
     '''Check no illegal atoms types are present'''
-    # 2) check that none of the monomers are blacklisted
     return cached_blacklisted_substructure_check(
         job,
         cache_attr_name='atoms_allowed',
         banned_substructs=BLACKLISTED_ATOM_QUERIES,
     )
-
+    
 def monomers_allowed(job : Job) -> bool:
     '''Check no structurally-disallowed monomers are present'''
     return cached_blacklisted_substructure_check(
@@ -324,8 +325,10 @@ def chemistry_valid(job : Job) -> bool:
         and monomers_allowed(job) \
         and mechanism_provided(job) \
         and mechanism_allowed(job) \
-
-## REACTANT ORDER PERCEPTION
+            
+            
+## 1) REACTANT AND MECHANISM PERCEPTION
+polymerize = PolymerBuildProject.make_group(name='polymerize')
 def reactant_order_evaluated(job : Job) -> bool:
     return 'reactant_ordering' in job.doc
 
@@ -341,78 +344,11 @@ def functionalities_evaluated(job : Job) -> bool:
 def monomers_satisfy_functionality(job : Job) -> bool:
     '''Check that all monomers have allowed degrees of functionalization'''
     return functionalities_evaluated(job) and all(f in ALLOWED_FUNCTIONALITIES for f in job.doc.functionalities)
-    
-## STRUCTURE BUILDING VALIDATION
+
 @PolymerBuildProject.label
 def has_chemical_fragments(job : Job) -> bool:
     '''Check if repeat unit fragments from reaction enumeration have been cached'''
     return has_nonempty_file(job, PolymerBuildProject.FRAGMENTS_PATH)
-
-@PolymerBuildProject.label
-def coordinates_generated(job : Job) -> bool:
-    '''Check whether a nonempty PDB file has been generated from fragments'''
-    return has_nonempty_file(job, PolymerBuildProject.OLIGOMER_PDB)
-
-@PolymerBuildProject.label
-def matches_m2p_smiles(job : Job) -> bool:
-    '''Check whether the resulting polymer agrees with the SMILES output of M2P (if data is provided)'''
-    ... # this check is not always applicatble, and the way DOP is currently defined is a little bit dicey
-
-@PolymerBuildProject.label
-def no_ring_piercing(job : Job) -> bool:
-    ... # TODO: implement post-minimization bond length check
-
-## OPENFF PARAMETER ASSIGNMENT
-@PolymerBuildProject.label
-def chemical_info_assigned(job : Job) -> bool:
-    '''Check whether a topology has atomic partial charges assigned to it'''
-    return has_nonempty_file(job, PolymerBuildProject.OLIGOMER_SDF)# and is_valid_sdfile(job.fn(PolymerBuildProject.OLIGOMER_SDF)) #(load_job_oligomer_molecule(job) is not None)
-
-@PolymerBuildProject.label
-def partial_charges_assigned(job : Job) -> bool:
-    '''Check whether a topology has atomic partial charges assigned to it'''
-    return 'partial_charges' in job.data
-
-## LATTICE SIZING AND PACKING
-def lattice_sites_determined(job : Job) -> bool:
-    '''Check whether lattice sites have been assigned for '''
-    return 'lattice_sites' in job.data
-
-@PolymerBuildProject.label
-def neat_melt_packed(job : Job) -> bool:
-    '''Check is packing of the neat melt was successful'''
-    return has_nonempty_file(job, PolymerBuildProject.MELT_NEAT_SDF)# and is_valid_sdfile(job.fn(PolymerBuildProject.MELT_NEAT_SDF)) #and (load_job_melt_neat_topology(job) is not None)
-
-def pbcs_determined(job : Job) -> bool:
-    '''Check whether periodic bounding box has been calculated'''
-    return ('box_vectors_nm' in job.data) and ('box_vector_dims' in job.doc)
-
-## OPENFF INTERCHANGE EXPORT
-@PolymerBuildProject.label
-def forcefield_is_valid(job : Job) -> bool:
-    '''Check that the force field specified is a valid and loadable OpenFF forcefield file installed in the current environment'''
-    try: # TODO: worth checking explicitly that the file exists/sanitizing missing .offxml etc.?
-        ForceField(job.sp.forcefield) # NOTE: need to handle exception when the offxml provided doesn't exist
-        return True
-    except OSError as error: # TODO: make error handling more specific and informative, left suggestive of common OSError for now
-        return False
-    
-@PolymerBuildProject.label
-def has_interchange(job : Job) -> bool:
-    '''Whether the current job has produced and serialized an OpenFF Interchange object'''
-    return has_nonempty_file(job, PolymerBuildProject.INTERCHANGE_PATH)
-
-@PolymerBuildProject.label # NOTE: the way this label is set up is potentially confusion, but is motivatated by the fact that we only want to flag when stereo does NOT agreed (i.e. be silent when it does/has not been determined)
-def interchange_stereo_inconsistent(job : Job) -> bool:
-    '''Indicate that interchange creation could not be performed due to library charge mismatch from stereo incompatibility (a known bug)'''
-    return not job.doc.get('interchange_stereo_consistent', True) # assumes consistency when it has not yet been explicitly determined (only returns True overall is explicitly found to be inconsistent)
-
-
-# OPERATIONS
-everything = PolymerBuildProject.make_group(name='everything') # "master" group which allows submission of all operations
-
-# 1) TEST FOR RXN TEMPLATE COMPLIANCE AND ENUMERATE CHEMICAL FRAGMENTS
-polymerize = PolymerBuildProject.make_group(name='polymerize')
 
 @everything
 @polymerize
@@ -500,9 +436,24 @@ def enum_fragments(job : Job) -> None:
         monogrp.to_file(job.fn(PolymerBuildProject.FRAGMENTS_PATH))
         logger.info('Successfully enumerated and cached repeat unit fragments')
 
-# 2) BUILD POLYMER STRUCTURE
+
+## 2) TOPOLOGY ASSEMBLY AND COORDINATE GENERATION
 oligomerize = PolymerBuildProject.make_group(name='oligomerize')
 
+@PolymerBuildProject.label
+def coordinates_generated(job : Job) -> bool:
+    '''Check whether a nonempty PDB file has been generated from fragments'''
+    return has_nonempty_file(job, PolymerBuildProject.OLIGOMER_PDB)
+
+@PolymerBuildProject.label
+def matches_m2p_smiles(job : Job) -> bool:
+    '''Check whether the resulting polymer agrees with the SMILES output of M2P (if data is provided)'''
+    ... # this check is not always applicatble, and the way DOP is currently defined is a little bit dicey
+
+@PolymerBuildProject.label
+def no_ring_piercing(job : Job) -> bool:
+    ... # TODO: implement post-minimization bond length check
+    
 @everything
 @oligomerize
 # @PolymerBuildProject.pre.copy_from(determine_reactant_order)
@@ -533,6 +484,17 @@ def build_oligomer_pdb(job : Job) -> None:
         )
         mbmol_to_openmm_pdb(job.fn(PolymerBuildProject.OLIGOMER_PDB), polymer)
         logger.info('Successfully generated PDB structure file')
+
+### 2A) OPENFF PARAMETER ASSIGNMENT
+@PolymerBuildProject.label
+def chemical_info_assigned(job : Job) -> bool:
+    '''Check whether a topology has atomic partial charges assigned to it'''
+    return has_nonempty_file(job, PolymerBuildProject.OLIGOMER_SDF)# and is_valid_sdfile(job.fn(PolymerBuildProject.OLIGOMER_SDF)) #(load_job_oligomer_molecule(job) is not None)
+
+@PolymerBuildProject.label
+def partial_charges_assigned(job : Job) -> bool:
+    '''Check whether a topology has atomic partial charges assigned to it'''
+    return 'partial_charges' in job.data
 
 @everything
 @oligomerize
@@ -590,8 +552,22 @@ def assign_partial_charges(job : Job) -> None:
         job.data.partial_charges = cmol.partial_charges.m_as(pcharge_unit)
         job.doc.pcharge_units = f'{pcharge_unit:simple}' # convert to string with explicit formatting to allow recovery of Unit type from text
 
-# 3) PACK LATTICE
+
+## 3) LATTICE SIZING AND PACKING
 pack_lattice = PolymerBuildProject.make_group(name='pack_lattice') 
+
+def lattice_sites_determined(job : Job) -> bool:
+    '''Check whether lattice sites have been assigned for '''
+    return 'lattice_sites' in job.data
+
+@PolymerBuildProject.label
+def neat_melt_packed(job : Job) -> bool:
+    '''Check is packing of the neat melt was successful'''
+    return has_nonempty_file(job, PolymerBuildProject.MELT_NEAT_SDF)# and is_valid_sdfile(job.fn(PolymerBuildProject.MELT_NEAT_SDF)) #and (load_job_melt_neat_topology(job) is not None)
+
+def pbcs_determined(job : Job) -> bool:
+    '''Check whether periodic bounding box has been calculated'''
+    return ('box_vectors_nm' in job.data) and ('box_vector_dims' in job.doc)
 
 @everything
 @pack_lattice
@@ -669,8 +645,28 @@ def determine_periodic_box(job : Job) -> None:
         job.doc.box_vector_dims = box_vector_dims
         job.data.box_vectors_nm = melt_box_vectors.m_as(offunit.nanometer) # store just the array of vectors (no units) in nm
 
-# 4) PREPARE AND SERIALIZE OpenFF INTERCHANGE
+
+## 4) OPENFF INTERCHANGE EXPORT
 to_interchange = PolymerBuildProject.make_group(name='to_interchange') 
+
+@PolymerBuildProject.label
+def forcefield_is_valid(job : Job) -> bool:
+    '''Check that the force field specified is a valid and loadable OpenFF forcefield file installed in the current environment'''
+    try: # TODO: worth checking explicitly that the file exists/sanitizing missing .offxml etc.?
+        ForceField(job.sp.forcefield) # NOTE: need to handle exception when the offxml provided doesn't exist
+        return True
+    except OSError as error: # TODO: make error handling more specific and informative, left suggestive of common OSError for now
+        return False
+    
+@PolymerBuildProject.label
+def has_interchange(job : Job) -> bool:
+    '''Whether the current job has produced and serialized an OpenFF Interchange object'''
+    return has_nonempty_file(job, PolymerBuildProject.INTERCHANGE_PATH)
+
+@PolymerBuildProject.label # NOTE: the way this label is set up is potentially confusion, but is motivatated by the fact that we only want to flag when stereo does NOT agreed (i.e. be silent when it does/has not been determined)
+def interchange_stereo_inconsistent(job : Job) -> bool:
+    '''Indicate that interchange creation could not be performed due to library charge mismatch from stereo incompatibility (a known bug)'''
+    return not job.doc.get('interchange_stereo_consistent', True) # assumes consistency when it has not yet been explicitly determined (only returns True overall is explicitly found to be inconsistent)
 
 @everything
 @to_interchange
@@ -727,12 +723,13 @@ def neat_melt_to_interchange(job : Job) -> None:
             logger.info('Pickling Interchange for reuse in MD export')
             pickle.dump(interchange, pklfile)
 
-# 5) EXPORT INTERCHANGE TO MD ENGINE FILES OF CHOICE
+
+## 5) EXPORT TO MD ENGINES
 md_export = PolymerBuildProject.make_group(name='md_export') 
 openmm_export = PolymerBuildProject.make_group(name='openmm_export') 
 lammps_export = PolymerBuildProject.make_group(name='lammps_export') 
 
-## LAMMPS versions
+### LAMMPS
 @PolymerBuildProject.label
 def exported_to_lammps(job : Job) -> bool:
     '''Check if LAMMPS files have been generated'''
@@ -801,7 +798,7 @@ def evaluate_energies_LAMMPS(job : Job) -> None:
             json.dump(energies_lmp_stringy, energies_lmp_file, indent=4)
         logger.info('LAMMPS energy output saved to file')
 
-## OpenMM versions
+### OpenMM
 @PolymerBuildProject.label
 def exported_to_openmm(job : Job) -> bool:
     '''Check if OpenMM files have been generated'''
