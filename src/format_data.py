@@ -18,12 +18,12 @@ try: # call as python module
     from .utils.filelib import validate_file_path
     from .utils.dataIO import WRITER_FNS_BY_EXT
     from .utils.dataIO import read_rxn_mapping_data, read_monomer_data
-    from .utils.datafmt import standardize_monomer_data
+    from .utils.datafmt import standardize_monomer_data_columns, label_monomer_statepoint_data
 except ImportError: # call as script file
     from utils.filelib import validate_file_path
     from utils.dataIO import WRITER_FNS_BY_EXT
     from utils.dataIO import read_rxn_mapping_data, read_monomer_data
-    from utils.datafmt import standardize_monomer_data
+    from utils.datafmt import standardize_monomer_data_columns, label_monomer_statepoint_data
     
 
 # READING INPUT DATA
@@ -50,9 +50,11 @@ def format_merged(args : Namespace) -> None:
     monomer_paths = sanitize_monomer_data_paths(args)
     monomer_dfs = read_monomer_data(monomer_paths)
     for df in monomer_dfs:
-        standardize_monomer_data(df, rxn_mapping=rxn_mapping)
+        standardize_monomer_data_columns(df)
 
     master_df = pd.concat(monomer_dfs) # columns we care about should be aligned now that the dataframes are standardized
+    label_monomer_statepoint_data(master_df, rxn_mapping=rxn_mapping, uniquify_chemistry=args.uniquify_chemistry) # only reformat and uniquify AFTER merge
+    
     if args.keep_n is not None:
         keep_n = min(args.keep_n, len(master_df)) # clamp number of sample to the size of the dataset
         if args.random:
@@ -105,7 +107,8 @@ def format_sequential(args : Namespace) -> None:
     monomer_dfs = read_monomer_data(monomer_paths)
 
     for monomer_df, output_path in zip(monomer_dfs, output_paths):
-        standardize_monomer_data(monomer_df, rxn_mapping=rxn_mapping)
+        standardize_monomer_data_columns(monomer_df)
+        label_monomer_statepoint_data(monomer_df, rxn_mapping=rxn_mapping, uniquify_chemistry=args.uniquify_chemistry) 
         # NOTE: don't need to validate output, as this was done in the output path compile step prior
         writer_fn = WRITER_FNS_BY_EXT[output_path.suffix]
         logging.info(f'Writing monomer data to {output_path}...')
@@ -156,8 +159,15 @@ def main() -> None:
         action='store_true',
         help='Whether to permit overwriting output files which already exist (default is False)'
     )
+    input_parser.add_argument(
+        '-uc',
+        '--uniquify-chemistry',
+        action='store_true',
+        help='Whether to drop duplicates of chemistries (based on canonical SMILES representation)'
+    )
 
     # subparsers for different modes of operation
+    ## "merge" mode parser
     parser_merge = subparsers.add_parser('merge', parents=[input_parser], description=format_merged.__doc__)
     parser_merge.add_argument(
         '-of',
@@ -180,6 +190,7 @@ def main() -> None:
     )
     parser_merge.set_defaults(func=format_merged)
 
+    ## "sequence" mode parser
     parser_sequence = subparsers.add_parser('sequence', parents=[input_parser], description=format_sequential.__doc__)
     rename_group = parser_sequence.add_mutually_exclusive_group(required=True)
     rename_group.add_argument(

@@ -29,11 +29,8 @@ def locate_attr_cols(dataframe : pd.DataFrame, columns_to_check : dict[str, Iter
         
     return attr_columns
 
-def standardize_monomer_data(dataframe : pd.DataFrame, rxn_mapping : dict[str, str]) -> None:
-    '''
-    Standardize column naming and format of required monomer data DataFrame (in-place)
-    and ensure required fields for statepoint generation are present
-    '''
+def standardize_monomer_data_columns(dataframe : pd.DataFrame) -> None:
+    '''Standardize column naming and format of required monomer data DataFrame (in-place)'''
     STATEPOINT_ATTR_COLUMNS : dict[str, tuple[str]] = { # the attributes to save and the column(s) to check for these values
         'smiles_original' : ('smiles_monomer', 'monomer', 'monomers', 'Monomer', 'Monomers'),
         'mechanism' : ('mechanism', 'rxnname', 'Chemistry')
@@ -44,9 +41,15 @@ def standardize_monomer_data(dataframe : pd.DataFrame, rxn_mapping : dict[str, s
         inplace=True # perform rename in-place to avoid allocating memory for new (potentially large) dataframe
     )
 
-    # insert new columns for processed statepoint data
+def label_monomer_statepoint_data(dataframe : pd.DataFrame, rxn_mapping : dict[str, str], uniquify_chemistry : bool=False) -> None:
+    '''Ensures monomer data DataFrame has detailed SMILES and reaction info columns,
+    and that metadata vs and essential statepoint data column labels are clearly differentiated
+    '''
     logging.info('Canonicalizing all SMILES')
     dataframe['smiles_canonical'] = dataframe['smiles_original'].map(lambda smi : parse_monomer_smiles(smi, canonicalize=True))
+    if uniquify_chemistry:
+        logging.info('Purging monomer records with duplicate chemistries')
+        dataframe.drop_duplicates('smiles_canonical', inplace=True)
     
     logging.info('Expanding SMILES to be chemically explicit')
     dataframe['smiles_explicit' ] = dataframe['smiles_canonical'].map(lambda smi : expanded_SMILES(smi, assign_map_nums=False))
@@ -59,8 +62,6 @@ def standardize_monomer_data(dataframe : pd.DataFrame, rxn_mapping : dict[str, s
         columns=lambda colname : f'{colname}<statedata>' if colname in statepoint_colnames else f'{colname}<metadata>',
         inplace=True # perform rename in-place to avoid allocating memory for new (potentially large) dataframe 
     ) 
-
-    return dataframe
 
 def parse_field_names_and_roles(dataframe : pd.DataFrame) -> tuple[StringMap, StringMap]:
     '''Extract the field (column) names and data role metadata
