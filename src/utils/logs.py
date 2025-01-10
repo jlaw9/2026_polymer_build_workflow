@@ -6,8 +6,6 @@ LOGLEVELS_BY_NAME = logging.getLevelNamesMapping() # define once in header to av
 from typing import Any, Generator, Optional, Sequence, Union
 
 import re
-INT_REGEX = re.compile(r'^[-+]?\d+$') # define once in header to avoid repreated calls
-
 from pathlib import Path
 from contextlib import contextmanager
 
@@ -94,6 +92,7 @@ def redirect_to_logfile(
             aux_logger.removeHandler(file_handler)
 
 # LOG LEVEL SETTINGS
+INT_REGEX = re.compile(r'^[-+]?\d+$') # define once in header to avoid repreated calls
 def representable_as_int(inp : Any) -> bool: # NOTE: many, MANY ways to implement this; opted for RegEx, as it offers the most control over edge cases
     '''
     Check if an objects representation can be interpreted as an integer
