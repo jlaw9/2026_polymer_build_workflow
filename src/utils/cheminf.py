@@ -50,11 +50,9 @@ def parse_monomer_smiles(smiles : Union[str, Sequence[str]], canonicalize : bool
         except (SyntaxError, ValueError):
             logging.debug(f'SMILES stayed as {smiles} (no tuple-ification detected)')
     
-    # print('#', smiles)
     if isinstance(smiles, Sequence) and not isinstance(smiles, str): # strings are technically Sequences, but we don't want to reformat them here
         smiles = '.'.join(smiles)
 
-    # print('##', smiles)
     if not (isinstance(smiles, str) and is_valid_SMILES(smiles)):
         # raise TypeError
         return None
