@@ -7,7 +7,7 @@ import logging
 import warnings
 warnings.catch_warnings(record=True)
 
-import sys
+import sys, time
 from argparse import ArgumentParser, Namespace
 
 from typing import ClassVar, Optional
@@ -141,6 +141,7 @@ class PolymerBuildProject(FlowProject):
     RELAXED_STEREO      : ClassVar[bool] = True
     LOGLEVEL            : int = logging.INFO
     ENERGY_UNIT         : OMMUnit = kilojoule_per_mole 
+    OP_TIME_RECORD_NAME : str = 'operation_times_sec'
 
     # PROJECT-WIDE FILE NAMES
     ## STRUCTURE FILES
@@ -177,6 +178,7 @@ class PolymerBuildProject(FlowProject):
 
 
 # PROJECT SPECIFIC JOB HELPER FUNCTIONS
+## JOB LOGGING
 def redirect_job_to_logfile(job : Job) -> logging.Logger:
     '''Thin wrapper around redirect_job_to_logfile() which is compatible with Signac jobs'''
     return redirect_to_logfile(
@@ -187,10 +189,23 @@ def redirect_job_to_logfile(job : Job) -> logging.Logger:
         # aux_loggers=get_active_loggers(), # get EVERY active logger registered across all Python modules
     )
 
-def has_nonempty_file(job : Job, filename : str) -> bool:
-    '''Check if a job contains a particular file which contains a nonzero amount of information'''
-    return job.isfile(filename) and not is_empty(job.fn(filename))
+## JOB HOOKS
+def record_operation_start_time(operation_name : str, job : Job) -> None:
+    '''Record into the job document when a particular operation began'''
+    job.doc.setdefault(PolymerBuildProject.OP_TIME_RECORD_NAME, {})
+    job.doc[PolymerBuildProject.OP_TIME_RECORD_NAME].update({f'{operation_name}_start' : time.time()})
 
+def record_operation_duration(operation_name : str, job : Job) -> None:
+    '''Record into the job document how long a particular operation took'''
+    op_times = job.doc.get(PolymerBuildProject.OP_TIME_RECORD_NAME, {})
+    start_time = op_times.pop(f'{operation_name}_start') # look up and withdraw start time
+    if start_time is None: # NOTE: dicts in Signac documents are NOT pure Python dicts; their "pop()" method returns None by default and never raises KeyError
+        raise ValueError(f'No start time recorded for operation "{operation_name}"; cannot calculate operation duration')
+    
+    op_duration = time.time() - start_time
+    job.doc[PolymerBuildProject.OP_TIME_RECORD_NAME].update({operation_name : op_duration})
+
+## HELPERS FOR OBTAINING OBJECTS BASED ON JOB DATA
 def load_job_rdmol(job : Job) -> Chem.Mol:
     '''Helper method for loading an RDKit molecule from the SMILES in a job's statepoint'''
     reactant_mol = Chem.MolFromSmiles(job.sp.smiles_explicit, sanitize=False) # CRITICAL that sanitize=False to avoid stripping
@@ -267,7 +282,12 @@ def load_job_openmm_context(job : Job) -> Context:
     apply_state_to_context(context, state)
 
     return context
-    
+
+## MODIFYING AND QUERYING JOB STATES     
+def has_nonempty_file(job : Job, filename : str) -> bool:
+    '''Check if a job contains a particular file which contains a nonzero amount of information'''
+    return job.isfile(filename) and not is_empty(job.fn(filename))
+
 def cached_blacklisted_substructure_check(job : Job, cache_attr_name : str, banned_substructs : dict[str, Chem.Mol]) -> bool:
     '''
     Boilerplate method for performing a one-time check for offending substructures against a jobs monomer molecules
@@ -899,7 +919,7 @@ def main() -> None:
     )
     # TODO : implement log level setting
 
-    # separate this scripts args from those required by signac
+    # separate this script's args from those required by signac
     start_args, signac_args = parser.parse_known_args()
     assert start_args.project_path.exists() and start_args.project_path.is_dir()
     
@@ -908,7 +928,6 @@ def main() -> None:
     PolymerBuildProject.RELAXED_STEREO = not start_args.strict_stereo
     # PolymerBuildProject.LOGLEVEL = ...
     logging.basicConfig(level=PolymerBuildProject.LOGLEVEL)
-    print(logging.root.level)
 
     new_project = PolymerBuildProject(
         path=start_args.project_path,
@@ -916,8 +935,12 @@ def main() -> None:
             'path' : __file__,
         }
     )
+    # register project-level hooks
+    new_project.project_hooks.on_start = [record_operation_start_time]
+    new_project.project_hooks.on_exit  = [record_operation_duration  ]
+    # new_project.project_hooks.on_exception = ... # TODO: add distinct timing mode for cases where operations fail before exit
 
-    # mock remaining Signac args for parser and run project CLI interface
+    # mock remaining Signac args for parser and run Project's shell interface
     sys.argv[1:] = signac_args # NOTE: this is an ugly hack to allow this script to take CLI args while not disturbing Signacs tastes for arguments
     new_project.main()
 
