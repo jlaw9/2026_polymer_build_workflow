@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 from rdkit import Chem
 
 from polymerist.genutils.fileutils.jsonio.jsonify import make_jsonifiable
-from polymerist.polymers.monomers.specification import expanded_SMILES, SANITIZE_AS_KEKULE
+from polymerist.polymers.monomers.specification import expanded_SMILES
 
 from polymerist.rdutils.bonding import portlib
 from polymerist.rdutils.reactions.reactions import AnnotatedReaction
@@ -206,7 +206,7 @@ for i, (rxnname, rxninfo) in enumerate(rxn_inputs.items(), start=1):
     for smiles in rxninfo.test_reactant_smiles:
         exp_smiles = expanded_SMILES(smiles, assign_map_nums=False)
         reactant_mol = Chem.MolFromSmiles(exp_smiles, sanitize=False)
-        Chem.SanitizeMol(reactant_mol, sanitizeOps=SANITIZE_AS_KEKULE)
+        Chem.SanitizeMol(reactant_mol) # implicitly undoes kekulization
         test_reactants.append(reactant_mol)
     test_reactants_catalogue[rxnname] = [Chem.Mol(reactant) for reactant in test_reactants]
 
