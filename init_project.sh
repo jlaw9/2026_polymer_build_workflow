@@ -3,7 +3,7 @@
 # Parameters
 runlevel=$1
 projname="${2:-"polyID"}"
-datapath="${3:-"src/monomer_data/PolyID_master_data.csv"}"
+datapath="${3:-"src/monomer_data/PolyID_master_unique.csv"}"
 outdir="${4:-"src"}"
 
 
