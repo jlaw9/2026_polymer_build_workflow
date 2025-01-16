@@ -43,7 +43,7 @@ polyid_scale_completed/*
 polyid_*/*
 polyID_*/*
 
-waterbox/water_20k.*
+waterbox/water_20k*.*
 
 # stray files
 **/__pycache__/*
