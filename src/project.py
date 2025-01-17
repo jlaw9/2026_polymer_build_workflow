@@ -15,7 +15,6 @@ from typing import ClassVar, Optional
 import pickle, json
 from functools import partial
 from pathlib import Path
-from string import ascii_uppercase
 
 import numpy as np
 
@@ -36,7 +35,6 @@ try: # attempt to deregister OpenEye toolkit
     GLOBAL_TOOLKIT_REGISTRY.deregister_toolkit(OpenEyeToolkitWrapper) # avoid expensive and non-standard OpenEye operations
 except ToolkitUnavailableException:
     pass
-
 
 from openff.units import (
     unit as offunit,
@@ -94,6 +92,7 @@ from polymerist.rdutils.reactions.reactors import PolymerizationReactor
 try: # call as python module
     from .utils.logs import redirect_to_logfile
     from .utils.filelib import is_empty
+    from .utils.cheminf import generate_smarts_fragments
     from .utils.offlib import elem_counts
     from .utils.packing import generate_uniform_subpopulated_lattice
     from .utils.mdexport import interchange_to_openmm
@@ -101,6 +100,7 @@ try: # call as python module
 except ImportError: # call as script file
     from utils.logs import redirect_to_logfile
     from utils.filelib import is_empty
+    from utils.cheminf import generate_smarts_fragments
     from utils.offlib import elem_counts
     from utils.packing import generate_uniform_subpopulated_lattice
     from utils.mdexport import interchange_to_openmm
@@ -434,25 +434,15 @@ def determine_reactant_functionalities(job : Job) -> None:
 @PolymerBuildProject.operation(directives={'walltime' : 2/60, 'np' : 1})
 def enum_fragments(job : Job) -> None:
     '''Enumerate all possible repeat unit fragment using cheminformatic reaction procedure'''
-    rxn = load_job_rxn(job)
-    reactor = PolymerizationReactor(rxn)
-
     reactant_mol = load_job_rdmol(job)
     reactants = Chem.GetMolFrags(reactant_mol, asMols=True)
 
+    rxn = load_job_rxn(job)
+    reactor = PolymerizationReactor(rxn)
+    
     monogrp = MonomerGroup()
     with redirect_job_to_logfile(job) as logger:
-        for intermediates, frags in reactor.propagate(reactants):
-            for assoc_group_name, rdfragment in zip(ascii_uppercase, frags):
-                # generate spec-compliant SMARTS
-                raw_smiles = Chem.MolToSmiles(rdfragment)
-                exp_smiles = specification.expanded_SMILES(raw_smiles)
-                spec_smarts = specification.compliant_mol_SMARTS(exp_smiles)
-
-                # record to monomer group
-                affix = 'TERM' if MonomerGroup.is_terminal(rdfragment) else 'MID'
-                monogrp.monomers[f'{assoc_group_name}_{affix}'] = [spec_smarts]
-
+        monogrp = generate_smarts_fragments(reactants, reactor)
         monogrp.to_file(job.fn(PolymerBuildProject.FRAGMENTS_PATH))
         logger.info('Successfully enumerated and cached repeat unit fragments')
 
