@@ -52,7 +52,7 @@ def label_monomer_statepoint_data(dataframe : pd.DataFrame, rxn_mapping : dict[s
         dataframe.drop_duplicates('smiles_canonical', inplace=True)
     
     logging.info('Expanding SMILES to be chemically explicit')
-    dataframe['smiles_explicit' ] = dataframe['smiles_canonical'].map(lambda smi : expanded_SMILES(smi, assign_map_nums=False))
+    dataframe['smiles_explicit' ] = dataframe['smiles_canonical'].map(lambda smi : expanded_SMILES(smi, assign_map_nums=False, kekulize=False))
     
     logging.info('Looking up reaction mechanism')
     dataframe['rxn_smarts'] = dataframe['mechanism'].map(rxn_mapping)

@@ -1,8 +1,9 @@
 '''Cheminformatic and SMILES/SMARTS string-related functionality'''
 
 import logging
-from typing import Optional, Sequence, Union
+from typing import Iterable, Optional, Sequence, Union
 
+from string import ascii_uppercase
 from pathlib import Path
 from ast import literal_eval
 
@@ -63,14 +64,12 @@ def parse_monomer_smiles(smiles : Union[str, Sequence[str]], canonicalize : bool
     
     return smiles
 
-def generate_smarts_fragments(reactants_dict : dict[str, Chem.Mol], reactor : PolymerizationReactor) -> MonomerGroup:
+def generate_smarts_fragments(reactants : Iterable[Chem.Mol], reactor : PolymerizationReactor) -> MonomerGroup:
     '''Takes a labelled dict of reactant Mols and a PolymerizationReactor object with predefined rxn mechanism
     Returns a MonomerGroup containing all fragments enumerated by the provided rxn'''
     monogrp = MonomerGroup()
-    initial_reactants = [reactants for reactants in reactants_dict.values()] # must convert to list to pass to ChemicalReaction
-    
-    for intermediates, frags in reactor.propagate(initial_reactants):
-        for assoc_group_name, rdfragment in zip(reactants_dict.keys(), frags):
+    for intermediates, frags in reactor.propagate(reactants):
+        for assoc_group_name, rdfragment in zip(ascii_uppercase, frags):
             # generate spec-compliant SMARTS
             raw_smiles = Chem.MolToSmiles(rdfragment)
             exp_smiles = specification.expanded_SMILES(raw_smiles)

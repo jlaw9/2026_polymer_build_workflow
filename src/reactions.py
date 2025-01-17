@@ -204,9 +204,9 @@ for i, (rxnname, rxninfo) in enumerate(rxn_inputs.items(), start=1):
     logging.info('Initializing test reactants for validation')
     test_reactants = []
     for smiles in rxninfo.test_reactant_smiles:
-        exp_smiles = expanded_SMILES(smiles, assign_map_nums=False)
+        exp_smiles = expanded_SMILES(smiles, assign_map_nums=False, kekulize=False)
         reactant_mol = Chem.MolFromSmiles(exp_smiles, sanitize=False)
-        Chem.SanitizeMol(reactant_mol) # implicitly undoes kekulization
+        Chem.SanitizeMol(reactant_mol) # implicitly undoes kekulization anyway
         test_reactants.append(reactant_mol)
     test_reactants_catalogue[rxnname] = [Chem.Mol(reactant) for reactant in test_reactants]
 
