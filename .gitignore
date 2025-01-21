@@ -23,7 +23,7 @@ src/monomer_data
 src/reactions
 src/parameters
 
-# becnhmarks and profiling
+# benchmarks and profiling
 profile.csv
 inc_times.csv
 
@@ -54,3 +54,4 @@ log.lammps
 out.lmp
 tmp.in
 *.out
+*.log
