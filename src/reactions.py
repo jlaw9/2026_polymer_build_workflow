@@ -40,8 +40,8 @@ fn_group_smarts = { # mapped SMARTS (SMIRKS) for common functional groups
     'carboxyl'        : '[O:1](-[C:2](=[O:3])-[*:4])-[H:5]',
     'ester'           : '[*:1]-[O:2]-[C:3](=[O:4])-[*:5]',
     'amine'           : '[N:1](-[*:2])(-[H:3])-[H:4]',
-    'hydroxyl'        : '[O:1](-[*:2])-[H:3]',
-    # 'hydroxyl'        : '[O:1](-[C:2]-[*:3])-[H:4]',
+    # 'hydroxyl'        : '[O:1](-[*:2])-[H:3]',
+    'hydroxyl'        : '[*:1]-[C:2](-[H:3])(-[H:4])-[O:5]-[H:6]',
     'isocyanate'      : '[O:1]=[C:2]=[N:3]-[*:4]'
 }
 fn_group_mols : dict[str, Chem.Mol] = {}
@@ -96,8 +96,8 @@ rxn_inputs : dict[str, ReactionInfo] = {
         reactant_groups=['hydroxyl', 'carboxyl'],
         byproduct_templates=['water'],
         bond_derangement={
-            1 : (3, 5),
-            4 : (5, 3)
+            5 : (6, 8),
+            7 : (8, 6),
         },
         test_reactant_smiles=('OCCO', 'O(C=O)c1ccc(cc1)C(=O)O'), # PET,
     ),
@@ -125,8 +125,8 @@ rxn_inputs : dict[str, ReactionInfo] = {
         reactant_groups=['hydroxyl', 'acyl_chloride'],
         byproduct_templates=['hcl'],
         bond_derangement= {
-            1 : (3, 5),
-            4 : (5, 3)
+            5 : (6, 8),
+            7 : (8, 6),
         },
         test_reactant_smiles=('Oc1ccc(cc1)C(c2ccc(O)cc2)(C)C', 'ClC(=O)Cl'), # BPA + phosgene
     ),
@@ -134,8 +134,8 @@ rxn_inputs : dict[str, ReactionInfo] = {
         reactant_groups=['hydroxyl', 'ester'],
         byproduct_templates=['alcohol'],
         bond_derangement= {
-            5 : (6, 3),
-            1 : (3, 6)
+            5 : (6, 9),
+            8 : (9, 6),
         },
         test_reactant_smiles=('Oc1ccc(cc1)C(c2ccc(O)cc2)(C)C', 'O=C(Oc1ccccc1)Oc2ccccc2'), # BPA + diphenyl carbonate
     ),
@@ -143,8 +143,8 @@ rxn_inputs : dict[str, ReactionInfo] = {
         reactant_groups=['isocyanate', 'hydroxyl'],
         byproduct_templates=[],
         bond_derangement={
-            7 : (5, 3),
-            2 : (3, 5)
+            2 : (3, 9),
+            10 : (9, 3),
         },
         test_reactant_smiles=('CC(=C)C(=O)OCC1COC(=O)O1', 'NCCCCCCN'), # PCA (propylene carbonate acrylate) + hexamethylenediamine
     ),
