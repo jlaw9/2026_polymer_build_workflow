@@ -20,7 +20,7 @@ openmm_testing.ipynb
 
 # source data for polymer build jobs
 src/monomer_data
-# src/reactions
+src/reactions
 src/parameters
 
 # benchmarks and profiling
