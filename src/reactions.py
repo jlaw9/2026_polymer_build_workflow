@@ -32,7 +32,7 @@ except ImportError: # call as script file
 fn_group_smarts = { # mapped SMARTS (SMIRKS) for common functional groups
     'phthalimide'     : '[*:1]-[C:2](=[O:3])-[N:4](-[*:5])-[C:6](=[O:7])-[*:8]',
     'carbamate'       : '[*:1]-[N:2](-[C:3](=[O:4])-[O:5]-[*:6])-[H:7]',
-    'cyclocarbonate'  : '[*:1]-[C:2]1(-[H:8])-[O:3]-[C:4](=[O:5])-[O:6]-[C:7]-1(-[H:9])-[H:10]',
+    'cyclocarbonate'  : '[*:1]-[C:2]1(-[H:8])-[O:3]-[C:4](=[O:5])-[O:6]-[C:7]-1(-[*:9])-[H:10]',
     'anhydride'       : '[*:1]-[C:2](=[O:3])-[O:4]-[C:5](=[O:6])-[*:7]',
     'vinyl'           : '[*:1]-[C:2](=[C:3](-[H:5])-[H:6])-[H:4]',
     'terminal_alkene' : '[*:1]-[C:2](-[*:3])=[C:4](-[H:5])-[H:6]',
@@ -40,7 +40,6 @@ fn_group_smarts = { # mapped SMARTS (SMIRKS) for common functional groups
     'carboxyl'        : '[O:1](-[C:2](=[O:3])-[*:4])-[H:5]',
     'ester'           : '[*:1]-[O:2]-[C:3](=[O:4])-[*:5]',
     'amine'           : '[N:1](-[*:2])(-[H:3])-[H:4]',
-    # 'hydroxyl'        : '[O:1](-[*:2])-[H:3]',
     'hydroxyl'        : '[*:1]-[C:2](-[H:3])(-[H:4])-[O:5]-[H:6]',
     'isocyanate'      : '[O:1]=[C:2]=[N:3]-[*:4]'
 }
