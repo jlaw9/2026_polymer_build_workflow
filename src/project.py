@@ -209,7 +209,7 @@ def record_operation_duration(operation_name : str, job : Job) -> None:
 def load_job_rdmol(job : Job) -> Chem.Mol:
     '''Helper method for loading an RDKit molecule from the SMILES in a job's statepoint'''
     reactant_mol = Chem.MolFromSmiles(job.sp.smiles_explicit, sanitize=False) # CRITICAL that sanitize=False to avoid stripping
-    Chem.SanitizeMol(reactant_mol, sanitizeOps=specification.SANITIZE_AS_KEKULE) # single, unified mol containing individual reactant as disconnected components
+    Chem.SanitizeMol(reactant_mol) # single, unified mol containing individual reactant as disconnected components
 
     return reactant_mol
 
@@ -417,7 +417,7 @@ def determine_reactant_functionalities(job : Job) -> None:
         for i in job.doc.reactant_ordering:
             reactant_smiles = reactant_smiles_all[i]
             reactant_mol = Chem.MolFromSmiles(reactant_smiles, sanitize=False) # CRITICAL that sanitize=False to avoid stripping
-            Chem.SanitizeMol(reactant_mol, sanitizeOps=specification.SANITIZE_AS_KEKULE) # single, unified mol containing individual reactant as disconnected components
+            Chem.SanitizeMol(reactant_mol) # single, unified mol containing individual reactant as disconnected components
             
             num_funct_groups = substructures.num_substruct_queries_distinct(reactant_mol, rxn.GetReactantTemplate(i))
             functionalities.append(num_funct_groups)
