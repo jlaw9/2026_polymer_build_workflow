@@ -28,15 +28,7 @@ except ImportError: # call as script file
     from utils.logs import format_error_for_log
 
 
-# HARD-CODED PATHS WHERE PARAMETERS SHOULD LIVE
-RXNS_DIR = _parent_dir / 'reactions'
-RXNS_DIR.mkdir(exist_ok=True)
-
-RXN_SMARTS_PATH  = RXNS_DIR / 'rxn_smarts.json'
-REACTANT_TESTS_PATH = RXNS_DIR / 'test_reactants.json'
-
 # INITIALIZING SMARTS FOR FUNCTIONAL GROUPS
-FN_GROUP_SMARTS_PATH  = RXNS_DIR / 'functional_groups.json'
 fn_group_smarts = { # mapped SMARTS (SMIRKS) for common functional groups
     'phthalimide'     : '[*:1]-[C:2](=[O:3])-[N:4](-[*:5])-[C:6](=[O:7])-[*:8]',
     'carbamate'       : '[*:1]-[N:2](-[C:3](=[O:4])-[O:5]-[*:6])-[H:7]',
@@ -49,6 +41,7 @@ fn_group_smarts = { # mapped SMARTS (SMIRKS) for common functional groups
     'ester'           : '[*:1]-[O:2]-[C:3](=[O:4])-[*:5]',
     'amine'           : '[N:1](-[*:2])(-[H:3])-[H:4]',
     'hydroxyl'        : '[O:1](-[*:2])-[H:3]',
+    # 'hydroxyl'        : '[O:1](-[C:2]-[*:3])-[H:4]',
     'isocyanate'      : '[O:1]=[C:2]=[N:3]-[*:4]'
 }
 fn_group_mols : dict[str, Chem.Mol] = {}
@@ -67,7 +60,6 @@ for group_name, smarts in fn_group_smarts.items():
     fn_group_mols[group_name] = fn_group_mol
 
 # INITIALIZING BYPRODUCTS TEMPLATES
-BYPRODUCT_SMARTS_PATH = RXNS_DIR / 'byproducts.json'
 byproduct_smarts = { # unmapped SMARTS for extraneous molecules which are to be unmapped and removed
     'water'   : '[H]-[O]-[H]',
     'hcl'     : '[H]-[Cl]',
@@ -79,7 +71,6 @@ byproduct_mols = {
 }
 
 # DEFINING MAPPING FROM POLYID MECHANISM NAMES TO MORE DESCRIPTIVE NAMES USED HERE
-RXNNAME_BACKMAP_PATH = RXNS_DIR / 'rxn_names_polyID.json'
 polyid_backmap = {
     "amide"     : "polyamide",
     "carbonate" : "polycarbonate_phosgene",
@@ -177,29 +168,19 @@ rxn_inputs : dict[str, ReactionInfo] = {
     ),
 }
 
-# ASSEMBLING AND TESTING REACTIONS
-rxns : dict[str, AnnotatedReaction] = {}
-rxn_smarts : dict[str, str] = {}
+# INITIALIZING REACTION ASSEMBLERS (WITHOUT INITIATING ASSEMBLY PROCESS)
 rxn_assemblers : dict[str, ReactionAssembler] = {}
 test_reactants_catalogue : dict[str, list[Chem.Mol]] = {}
 
 num_rxn_inputs = len(rxn_inputs)
 for i, (rxnname, rxninfo) in enumerate(rxn_inputs.items(), start=1):
-    logging.info(f'Assembling reaction {i}/{num_rxn_inputs} ("{rxnname}")')
-    rxn_inputs_path = RXNS_DIR / f'{rxnname}_inputs.json'
-    rxninfo.to_file(rxn_inputs_path)
-
-    logging.info('Initializing reaction template')
+    logging.info(f'Initializing reaction template {i}/{num_rxn_inputs} ("{rxnname}")')
     rxn_assembler = ReactionAssembler(
         reactive_groups=[fn_group_mols[reacgrp_name] for reacgrp_name in rxninfo.reactant_groups],
         byproducts=[byproduct_mols[byprod_name] for byprod_name in rxninfo.byproduct_templates],
         bond_derangement=rxninfo.bond_derangement,
     )
     rxn_assemblers[rxnname] = rxn_assembler # this is solely for debug in external modules
-
-    rxn = rxn_assembler.assemble_rxn(show_steps=False)
-    rxn.rxnname = rxnname
-    logging.info('Reaction template successfully assembled')
 
     logging.info('Initializing test reactants for validation')
     test_reactants = []
@@ -209,33 +190,56 @@ for i, (rxnname, rxninfo) in enumerate(rxn_inputs.items(), start=1):
         Chem.SanitizeMol(reactant_mol) # implicitly undoes kekulization anyway
         test_reactants.append(reactant_mol)
     test_reactants_catalogue[rxnname] = [Chem.Mol(reactant) for reactant in test_reactants]
-
-    logging.info('Validating reaction template on test reactants')
-    try:
-        reactor = PolymerizationReactor(rxn)
-        _ = [(dimer, frags) for dimer, frags in reactor.propagate(test_reactants)]
-        logging.info('VALIDATION SUCCESSFUL: Reaction and test reactants are compatible')
-    except Exception as error: # TODO: make this more granular
-        logging.error(format_error_for_log(error))
-        continue
-
-    logging.info('Recording reaction object and representative SMARTS')
-    rxns[rxnname] = rxn
-    rxn_smarts[rxnname] = rxn.to_smarts().replace('#0', '*')  # temporary fix to 0-atomic number bug
     
-RXN_SMARTS_MAPPED_PATH = RXNS_DIR / 'rxns_polyID.json'
-rxns_polyid = { # expand this here to avoid need for backmap awareness downstream
-    polyid_name : rxn_smarts[descriptive_name]
-        for polyid_name, descriptive_name in polyid_backmap.items() 
-}
 
 if __name__ == '__main__':
+    RXNS_DIR = _parent_dir / 'reactions'
+    RXNS_DIR.mkdir(exist_ok=True)
+
+    # ASSEMBLING AND TESTING REACTIONS
+    rxns : dict[str, AnnotatedReaction] = {}
+    rxn_smarts : dict[str, str] = {}
+
+    num_rxn_inputs = len(rxn_inputs)
+    for i, (rxnname, rxninfo) in enumerate(rxn_inputs.items(), start=1):
+        logging.info(f'Assembling reaction {i}/{num_rxn_inputs} ("{rxnname}")')
+        rxn_inputs_path = RXNS_DIR / f'{rxnname}_inputs.json'
+        rxninfo.to_file(rxn_inputs_path)
+
+        logging.info('Initializing Reaction')
+        rxn_assembler = rxn_assemblers[rxnname]
+        rxn = rxn_assembler.assemble_rxn(show_steps=False)
+        rxn.rxnname = rxnname
+        logging.info('Reaction successfully assembled')
+
+        logging.info('Validating reaction template on test reactants')
+        test_reactants = test_reactants_catalogue[rxnname]
+        try:
+            reactor = PolymerizationReactor(rxn)
+            _ = [(dimer, frags) for dimer, frags in reactor.propagate(test_reactants)]
+            logging.info('VALIDATION SUCCESSFUL: Reaction and test reactants are compatible')
+        except Exception as error: # TODO: make this more granular
+            logging.error(format_error_for_log(error))
+            continue
+
+        logging.info('Recording reaction object and representative SMARTS')
+        rxns[rxnname] = rxn
+        rxn_smarts[rxnname] = rxn.to_smarts().replace('#0', '*')  # temporary fix to 0-atomic number bug
+    
+    # BUILDING DIRECT MAP FROM POLYID MECHANISM NAMES TO SMARTS FOR BREVITY
+    rxns_polyid = { # expand this here to avoid need for backmap awareness downstream
+        polyid_name : rxn_smarts[descriptive_name]
+            for polyid_name, descriptive_name in polyid_backmap.items() 
+    }
+    
+    # PATHS WHERE REACTION OUTPUTS SHOULD LIVE (HARD-CODED FOR NOW)
     rxn_info_paths : dict[Path, dict[str, str]] = {
-        FN_GROUP_SMARTS_PATH : fn_group_smarts,
-        BYPRODUCT_SMARTS_PATH : byproduct_smarts,
-        RXN_SMARTS_PATH : rxn_smarts,
-        RXNNAME_BACKMAP_PATH : polyid_backmap,
-        RXN_SMARTS_MAPPED_PATH : rxns_polyid,
+        Path(RXNS_DIR, 'functional_groups.json') : fn_group_smarts,
+        Path(RXNS_DIR, 'byproducts.json')        : byproduct_smarts,
+        Path(RXNS_DIR, 'rxn_smarts.json')        : rxn_smarts,
+        Path(RXNS_DIR, 'rxns_polyID.json')       : rxns_polyid,
+        Path(RXNS_DIR, 'rxn_names_polyID.json')  : polyid_backmap,
+        # Path(RXNS_DIR, 'test_reactants.json')    : test_reactants_catalogue, # NOTE: not serialized, since this dict contains Mol objects (not SMILES strings)
     }
     for target_path, rxn_info_dict in rxn_info_paths.items():
         # if not target_path.exists():
