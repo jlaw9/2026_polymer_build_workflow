@@ -40,12 +40,14 @@ fn_group_smarts = { # mapped SMARTS (SMIRKS) for common functional groups
     'carboxyl'        : '[O:1](-[C:2](=[O:3])-[*:4])-[H:5]',
     'ester'           : '[*:1]-[O:2]-[C:3](=[O:4])-[*:5]',
     'amine'           : '[N:1](-[*:2])(-[H:3])-[H:4]',
-    'hydroxyl'        : '[*:1]-[C:2](-[H:3])(-[H:4])-[O:5]-[H:6]',
+    'hydroxyl'        : '[H:1]-[O:2]-[!$([#6]=[#8]):3]',
+    # 'hydroxyl'        : '[*:1]-[C:2](-[H:3])(-[H:4])-[O:5]-[H:6]',
     'isocyanate'      : '[O:1]=[C:2]=[N:3]-[*:4]'
 }
 fn_group_mols : dict[str, Chem.Mol] = {}
 for group_name, smarts in fn_group_smarts.items():
-    fn_group_mol = Chem.MolFromSmiles(smarts, sanitize=False) # despite being SMARTS, the molecule needs to be initialized via SMILES to avoid query persistence during rearrangements
+    fn_group_mol = Chem.MolFromSmarts(smarts) # despite being SMARTS, the molecule needs to be initialized via SMILES to avoid query persistence during rearrangements
+    # fn_group_mol = Chem.MolFromSmiles(smarts, sanitize=False) # despite being SMARTS, the molecule needs to be initialized via SMILES to avoid query persistence during rearrangements
     fn_group_mol.SetProp('_Name', group_name) # shows up as MDL mol label in file
     
     group_label_assigned : bool = False # ensure this is only done for one linker per group
@@ -95,8 +97,8 @@ rxn_inputs : dict[str, ReactionInfo] = {
         reactant_groups=['hydroxyl', 'carboxyl'],
         byproduct_templates=['water'],
         bond_derangement={
-            5 : (6, 8),
-            7 : (8, 6),
+            2 : (1, 5),
+            4 : (5, 1),
         },
         test_reactant_smiles=('OCCO', 'O(C=O)c1ccc(cc1)C(=O)O'), # PET,
     ),
@@ -120,30 +122,30 @@ rxn_inputs : dict[str, ReactionInfo] = {
         },
         test_reactant_smiles=('O(c1ccc(N)cc1)c2ccc(cc2)N', 'C1=C2C(=CC3=C1C(=O)OC3=O)C(=O)OC2=O'), # DuPont Kapton (poly (4,4'-oxydiphenylene-pyromellitimide))
     ),
-    'polycarbonate_phosgene' : ReactionInfo(
+    'polycarbonate_phosgene'     : ReactionInfo(
         reactant_groups=['hydroxyl', 'acyl_chloride'],
         byproduct_templates=['hcl'],
         bond_derangement= {
-            5 : (6, 8),
-            7 : (8, 6),
+            2 : (1, 5),
+            4 : (5, 1),
         },
         test_reactant_smiles=('Oc1ccc(cc1)C(c2ccc(O)cc2)(C)C', 'ClC(=O)Cl'), # BPA + phosgene
     ),
-    'polycarbonate_nonphosgene' : ReactionInfo(
+    'polycarbonate_nonphosgene'  : ReactionInfo(
         reactant_groups=['hydroxyl', 'ester'],
         byproduct_templates=['alcohol'],
         bond_derangement= {
-            5 : (6, 9),
-            8 : (9, 6),
+            2 : (1, 6),
+            5 : (6, 1),
         },
         test_reactant_smiles=('Oc1ccc(cc1)C(c2ccc(O)cc2)(C)C', 'O=C(Oc1ccccc1)Oc2ccccc2'), # BPA + diphenyl carbonate
     ),
-    'polyurethane_isocyanate' : ReactionInfo(
-        reactant_groups=['isocyanate', 'hydroxyl'],
+    'polyurethane_isocyanate'    : ReactionInfo(
+        reactant_groups=['hydroxyl', 'isocyanate'],
         byproduct_templates=[],
         bond_derangement={
-            2 : (3, 9),
-            10 : (9, 3),
+            2 : (1, 5),
+            6 : (5, 1),
         },
         test_reactant_smiles=('CC(=C)C(=O)OCC1COC(=O)O1', 'NCCCCCCN'), # PCA (propylene carbonate acrylate) + hexamethylenediamine
     ),
@@ -156,7 +158,7 @@ rxn_inputs : dict[str, ReactionInfo] = {
         },
         test_reactant_smiles=('O=C=N\CCCCCC/N=C=O', 'OCCCCO'), # Bayer HDI + BDO
     ),
-    'polyvinyl_head_tail' : ReactionInfo(
+    'polyvinyl_head_tail'        : ReactionInfo(
         reactant_groups=['terminal_alkene', 'vinyl'],
         byproduct_templates=[],
         bond_derangement= {
