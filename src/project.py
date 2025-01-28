@@ -166,7 +166,7 @@ class PolymerBuildProject(FlowProject):
     OPENMM_DIR          : ClassVar[str] = 'OpenMM'
     OPENMM_STATE_PATH   : ClassVar[str] = f'{OPENMM_DIR}/state.xml'
     OPENMM_SYSTEM_PATH  : ClassVar[str] = f'{OPENMM_DIR}/system.xml'
-    OPENMM_TOPO_PATH    : ClassVar[str] = f'{OPENMM_DIR}/topology.xml'
+    OPENMM_TOPO_PATH    : ClassVar[str] = f'{OPENMM_DIR}/topology.pdb'
     OPENMM_INTEG_PATH   : ClassVar[str] = f'{OPENMM_DIR}/integrator.xml'
     OPENMM_PATHS : ClassVar[list[str]] = (
         OPENMM_STATE_PATH,
