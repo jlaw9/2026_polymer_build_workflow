@@ -68,7 +68,7 @@ def generate_smarts_fragments(reactants : Iterable[Chem.Mol], reactor : Polymeri
     '''Takes a labelled dict of reactant Mols and a PolymerizationReactor object with predefined rxn mechanism
     Returns a MonomerGroup containing all fragments enumerated by the provided rxn'''
     monogrp = MonomerGroup()
-    for intermediates, frags in reactor.propagate(reactants):
+    for adducts, frags in reactor.propagate(reactants):
         for assoc_group_name, rdfragment in zip(ascii_uppercase, frags):
             # generate spec-compliant SMARTS
             raw_smiles = Chem.MolToSmiles(rdfragment)
