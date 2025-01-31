@@ -92,7 +92,7 @@ def redirect_to_logfile(
             aux_logger.removeHandler(file_handler)
 
 # LOG LEVEL SETTINGS
-INT_REGEX = re.compile(r'^[-+]?\d+$') # define once in header to avoid repreated calls
+INT_REGEX = re.compile(r'^[-+]?\d+$') # define once in header to avoid repeated calls
 def representable_as_int(inp : Any) -> bool: # NOTE: many, MANY ways to implement this; opted for RegEx, as it offers the most control over edge cases
     '''
     Check if an objects representation can be interpreted as an integer
@@ -108,7 +108,7 @@ def representable_as_int(inp : Any) -> bool: # NOTE: many, MANY ways to implemen
 def log_level_from_str(level_input : Union[int, str]) -> int:
     '''
     Parse a wide range of strings representing Python logging
-    log levels into integers repreenting valid log levels
+    log levels into integers representing valid log levels
     '''
     if representable_as_int(level_input):
         level_input = int(level_input) # perform int conversion, if valid
