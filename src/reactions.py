@@ -146,7 +146,7 @@ rxn_inputs : dict[str, ReactionInfo] = {
             2 : (1, 5),
             6 : (5, 1),
         },
-        test_reactant_smiles=('CC(=C)C(=O)OCC1COC(=O)O1', 'NCCCCCCN'), # PCA (propylene carbonate acrylate) + hexamethylenediamine
+        test_reactant_smiles=('O=C=N\CCCCCC/N=C=O', 'OCCCCO'), # Bayer HDI + BDO
     ),
     'polyurethane_nonisocyanate' : ReactionInfo(
         reactant_groups=['cyclocarbonate', 'amine'],
@@ -155,7 +155,7 @@ rxn_inputs : dict[str, ReactionInfo] = {
             5  : (4, 11), # (7, 11)
             13 : (11, 4)  # (11, 7)
         },
-        test_reactant_smiles=('O=C=N\CCCCCC/N=C=O', 'OCCCCO'), # Bayer HDI + BDO
+        test_reactant_smiles=('CC(=C)C(=O)OCC1COC(=O)O1', 'NCCCCCCN'), # PCA (propylene carbonate acrylate) + hexamethylenediamine
     ),
     'polyvinyl_head_tail'        : ReactionInfo(
         reactant_groups=['terminal_alkene', 'vinyl'],
@@ -188,6 +188,10 @@ for i, (rxnname, rxninfo) in enumerate(rxn_inputs.items(), start=1):
         exp_smiles = expanded_SMILES(smiles, assign_map_nums=False, kekulize=False)
         reactant_mol = Chem.MolFromSmiles(exp_smiles, sanitize=False)
         Chem.SanitizeMol(reactant_mol) # implicitly undoes kekulization anyway
+        
+        # reset aromaticity
+        Chem.Kekulize(reactant_mol, clearAromaticFlags=True)
+        Chem.SetAromaticity(reactant_mol, model=Chem.AROMATICITY_MDL)
         test_reactants.append(reactant_mol)
     test_reactants_catalogue[rxnname] = [Chem.Mol(reactant) for reactant in test_reactants]
     
@@ -216,7 +220,7 @@ if __name__ == '__main__':
         test_reactants = test_reactants_catalogue[rxnname]
         try:
             reactor = PolymerizationReactor(rxn)
-            _ = [(dimer, frags) for dimer, frags in reactor.propagate(test_reactants)]
+            products = reactor.react(test_reactants)
             logging.info('VALIDATION SUCCESSFUL: Reaction and test reactants are compatible')
         except Exception as error: # TODO: make this more granular
             logging.error(format_error_for_log(error))
