@@ -20,7 +20,6 @@ try: # call as python module
     from .utils.filelib import validate_file_path
     from .utils.dataIO import read_monomer_data
     from .utils.datafmt import parse_field_names_and_roles
-    from .utils.containers import cartesian_grid
 except ImportError: # call as script file    
     from __init__ import _parent_dir
     from parameters import ParametersSwept, PARAMS_SWEPT_PATH 
@@ -29,7 +28,8 @@ except ImportError: # call as script file
     from utils.filelib import validate_file_path
     from utils.dataIO import read_monomer_data
     from utils.datafmt import parse_field_names_and_roles
-    from utils.containers import cartesian_grid
+    
+from polymerist.genutils.iteration import cartesian_grid
 
 
 # Helper functions

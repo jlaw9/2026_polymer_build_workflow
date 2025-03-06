@@ -8,9 +8,9 @@ StringMap : TypeAlias = dict[str, str]
 import re
 import pandas as pd
 
-from .containers import stringify_dict
 from .cheminf import parse_monomer_smiles
 
+from polymerist.genutils.textual.prettyprint import stringify_dict
 from polymerist.polymers.monomers.specification import expanded_SMILES
 
 
