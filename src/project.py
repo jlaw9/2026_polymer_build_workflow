@@ -10,7 +10,7 @@ warnings.catch_warnings(record=True)
 import sys, time
 from argparse import ArgumentParser, Namespace
 
-from typing import ClassVar, Optional
+from typing import ClassVar, Iterable, Optional
 
 import pickle, json
 from functools import partial
@@ -46,6 +46,7 @@ from openff.interchange import Interchange
 
 # Cheminformatics
 from rdkit import Chem
+from rdkit.Chem.rdmolops import AromaticityModel, SanitizeFlags
 
 # OpenMM imports
 from openmm import LangevinMiddleIntegrator
@@ -70,7 +71,7 @@ POLYMERIST_LOGGERS = [
             if (logger is not None) and (not isinstance(logger, logging.PlaceHolder))
 ] # TODO: move this into polymerist?
 
-from polymerist.smileslib import substructures
+from polymerist.smileslib.special import SPECIAL_QUERY_MOLS
 
 from polymerist.polymers.monomers import MonomerGroup, specification
 from polymerist.polymers.building import build_linear_polymer, mbmol_to_openmm_pdb
@@ -87,12 +88,17 @@ from polymerist.mdtools.lammpstools.lammpseval import get_lammps_energies
 from polymerist.rdutils.rdcoords.tiling import rdmol_effective_radius
 from polymerist.rdutils.reactions.reactions import AnnotatedReaction, BadNumberReactants
 from polymerist.rdutils.reactions.reactors import PolymerizationReactor
+from polymerist.rdutils.substructures import num_substruct_queries_distinct
+from polymerist.rdutils.sanitization import sanitize_mol
+
+from polymerist.smileslib.cleanup import expanded_SMILES
 
 # Utils imports - made these non-relative to avoid screwing up external vs internal call
 try: # call as python module
     from .utils.logs import redirect_to_logfile
     from .utils.filelib import is_empty
     from .utils.cheminf import generate_smarts_fragments
+    from .utils.dataIO import read_rxn_mapping_data
     from .utils.offlib import elem_counts
     from .utils.packing import generate_uniform_subpopulated_lattice
     from .utils.mdexport import interchange_to_openmm
@@ -101,6 +107,7 @@ except ImportError: # call as script file
     from utils.logs import redirect_to_logfile
     from utils.filelib import is_empty
     from utils.cheminf import generate_smarts_fragments
+    from utils.dataIO import read_rxn_mapping_data
     from utils.offlib import elem_counts
     from utils.packing import generate_uniform_subpopulated_lattice
     from utils.mdexport import interchange_to_openmm
@@ -114,17 +121,17 @@ BLACKLISTED_ATOM_QUERIES = {
     # 'phosphorus' : Chem.MolFromSmarts('[P]'),
     'sulfur'  : Chem.MolFromSmarts('[S]'),
     'silicon' : Chem.MolFromSmarts('[Si]'),
-    'metal'   : substructures.SPECIAL_QUERY_MOLS['metal'],
-    # 'halogen' : substructures.SPECIAL_QUERY_MOLS['halogen'],
+    'metal'   : SPECIAL_QUERY_MOLS['metal'],
+    # 'halogen' : SPECIAL_QUERY_MOLS['halogen'],
 }
 _blacklisted_monomer_smiles = [ # monomers which are, for one reason or another, disallowed
     'CC(C)(C)c1cc(c(Oc2ccc(cc2)N(c3ccc(N)cc3)c4ccc(N)cc4)c(c1)C(C)(C)C)C(C)(C)C',  # the extraordinary number of symmetries of this amine ("4-N-(4-aminophenyl)-4-N-[4-(2,4,6-tritert-butylphenoxy)phenyl]benzene-1,4-diamine")... 
     'CC(C)(C)c1cc(Oc2ccc(-c3ccc(N)cc3)cc2C(F)(F)F)c(C(C)(C)C)cc1Oc1ccc(-c2ccc(N)cc2)cc1C(F)(F)F', # ...mean it takes impractically long to isomorphism match during the Topology partition step
-    'CCCCCCCCCCCCCCCCC(CO)C(CO)CCCCCCCCCCCCCCCC', # this one is not necessarily highly-automorphic, but DOES hang up the partition algorithm
+    'CCCCCCCCCCCCCCCCC(CO)C(CO)CCCCCCCCCCCCCCCC',
 ] # TODO: might try setting limit of <1000 automorphisms for automatic check (since this is the default limit for substructure matches)
 BLACKLISTED_MONOMER_QUERIES = {}
 for smiles in _blacklisted_monomer_smiles:
-    exp_spi = specification.expanded_SMILES(smiles, assign_map_nums=False)
+    exp_spi = expanded_SMILES(smiles, assign_map_nums=False)
     banned_mol = Chem.MolFromSmiles(exp_spi, sanitize=False)
     BLACKLISTED_MONOMER_QUERIES[smiles] = banned_mol
 BLACKLISTED_MECHANISMS = [
@@ -137,11 +144,17 @@ BLACKLISTED_MECHANISMS = [
 class PolymerBuildProject(FlowProject):
     '''Project for automated high-throughput generation of polymer structure and MD inputs from chemical data'''
     # GLOBAL CONFIG - TODO: make these configuratble via argparse to the containing script
+    ## LOGGING AND REPORTING FORMATS
     QUANTITY_PRECISION  : ClassVar[int] = 4 # number of decimal place to report Quantities to when printing/logging
+    LOGLEVEL            : ClassVar[int] = logging.INFO
+    ENERGY_UNIT         : ClassVar[OMMUnit] = kilojoule_per_mole 
+    OP_TIME_RECORD_NAME : ClassVar[str] = 'operation_times_sec'
+    
+    ## CHEMICAL SPECIFICATION
     RELAXED_STEREO      : ClassVar[bool] = True
-    LOGLEVEL            : int = logging.INFO
-    ENERGY_UNIT         : OMMUnit = kilojoule_per_mole 
-    OP_TIME_RECORD_NAME : str = 'operation_times_sec'
+    SANITIZE_OPS        : ClassVar[SanitizeFlags] = SanitizeFlags.SANITIZE_ALL
+    AROMATICITY_MODEL   : ClassVar[AromaticityModel] = AromaticityModel.AROMATICITY_MDL
+    REGISTERED_RXN_SMARTS : ClassVar[dict[str, str]] = {}
 
     # PROJECT-WIDE FILE NAMES
     ## STRUCTURE FILES
@@ -206,12 +219,16 @@ def record_operation_duration(operation_name : str, job : Job) -> None:
     job.doc[PolymerBuildProject.OP_TIME_RECORD_NAME].update({operation_name : op_duration})
 
 ## HELPERS FOR OBTAINING OBJECTS BASED ON JOB DATA
+def sanitized_mol_from_smiles(smiles : str) -> Chem.Mol:
+    '''Load a mol from SMILES and apply the predefined sanitization and aromaticity operations'''
+    mol = Chem.MolFromSmiles(smiles, sanitize=False) # CRITICAL that sanitize=False to avoid stripping
+    sanitize_mol(mol, sanitize_ops=PolymerBuildProject.SANITIZE_OPS, aromaticity_model=PolymerBuildProject.AROMATICITY_MODEL, in_place=True)
+    
+    return mol
+
 def load_job_rdmol(job : Job) -> Chem.Mol:
     '''Helper method for loading an RDKit molecule from the SMILES in a job's statepoint'''
-    reactant_mol = Chem.MolFromSmiles(job.sp.smiles_explicit, sanitize=False) # CRITICAL that sanitize=False to avoid stripping
-    Chem.SanitizeMol(reactant_mol) # single, unified mol containing individual reactant as disconnected components
-
-    return reactant_mol
+    return sanitized_mol_from_smiles(job.sp.smiles_explicit)
 
 def load_job_rxn(job : Job) -> AnnotatedReaction:
     '''Helper method for loading an RDKit molecule from the SMILES in a job's statepoint'''
@@ -288,7 +305,7 @@ def has_nonempty_file(job : Job, filename : str) -> bool:
     '''Check if a job contains a particular file which contains a nonzero amount of information'''
     return job.isfile(filename) and not is_empty(job.fn(filename))
 
-def cached_blacklisted_substructure_check(job : Job, cache_attr_name : str, banned_substructs : dict[str, Chem.Mol]) -> bool:
+def cached_blacklisted_substructure_check(job : Job, cache_attr_name : str, banned_substructs : Iterable[Chem.Mol]) -> bool:
     '''
     Boilerplate method for performing a one-time check for offending substructures against a jobs monomer molecules
     Returns True if none of the queried substructures are present, and False if any of them are
@@ -299,52 +316,52 @@ def cached_blacklisted_substructure_check(job : Job, cache_attr_name : str, bann
     contains_banned_substructs = job.doc.get(cache_attr_name, None) # perform cheap check for cached value
     if contains_banned_substructs is None: # if no cached value is found, fall back to explicit calculation
         reactant_mol = load_job_rdmol(job)
-        contains_banned_substructs = not any( # check that not one of the substructs is present
-            substructures.matching_labels_from_substruct_dict(
-                reactant_mol,
-                banned_substructs,
-            )
-        )
+        for banned_substruct in banned_substructs:
+            if reactant_mol.HasSubstructMatch(banned_substruct):
+                contains_banned_substructs = True
+        else:
+            contains_banned_substructs = False
+
         job.doc[cache_attr_name] = contains_banned_substructs # cache to job document
 
     return contains_banned_substructs
 
 
-# OPERATIONS,  LABELS AND CONDITIONS
+# OPERATIONS, LABELS AND CONDITIONS
 everything = PolymerBuildProject.make_group(name='everything') # "master" group which allows submission of all operations
 
 ## 0) CHEMISTRY VALIDATION
 def atoms_allowed(job : Job) -> bool:
     '''Check no illegal atoms types are present'''
-    return cached_blacklisted_substructure_check(
+    return not cached_blacklisted_substructure_check( # success here means NOT finding any banned substructures
         job,
         cache_attr_name='atoms_allowed',
-        banned_substructs=BLACKLISTED_ATOM_QUERIES,
+        banned_substructs=BLACKLISTED_ATOM_QUERIES.values(),
     )
     
 def monomers_allowed(job : Job) -> bool:
     '''Check no structurally-disallowed monomers are present'''
-    return cached_blacklisted_substructure_check(
+    return not cached_blacklisted_substructure_check( # success here means NOT finding any banned substructures
         job,
         cache_attr_name='monomers_allowed',
-        banned_substructs=BLACKLISTED_MONOMER_QUERIES,
+        banned_substructs=BLACKLISTED_MONOMER_QUERIES.values(),
     )
 
 def mechanism_provided(job : Job) -> bool:
     '''Check that a reference "mechanism" field was generated during job initialization'''
-    return 'mechanism' in job.doc
+    return 'mechanism_labelled' in job.doc
 
 def mechanism_allowed(job : Job) -> bool:
     '''Check that the rxn mechanism type is not explicitly blacklisted'''
-    return job.doc.mechanism not in BLACKLISTED_MECHANISMS
+    return job.doc.mechanism_labelled not in BLACKLISTED_MECHANISMS
 
 @PolymerBuildProject.label
 def chemistry_valid(job : Job) -> bool:
     '''Aggregate together all atom, monomer, and mechanism prechecks'''
     return atoms_allowed(job) \
         and monomers_allowed(job) \
-        and mechanism_provided(job) \
         and mechanism_allowed(job) \
+        # and mechanism_provided(job) \
             
             
 ## 1) REACTANT AND MECHANISM PERCEPTION
@@ -396,7 +413,7 @@ def determine_reactant_order(job : Job) -> None:
         if reactant_ordering is not None:
             logger.info(f'Identified valid reactant ordering: {reactant_ordering}')
         else:
-            logger.error(f'No valid ordering of reactants could be solved for the chosen "{job.doc.mechanism}" rxn template')
+            logger.error(f'No valid ordering of reactants could be solved for the chosen "{job.doc.mechanism_labelled}" rxn template')
 
 @everything
 @polymerize
@@ -416,10 +433,9 @@ def determine_reactant_functionalities(job : Job) -> None:
         functionalities : list[int] = []
         for i in job.doc.reactant_ordering:
             reactant_smiles = reactant_smiles_all[i]
-            reactant_mol = Chem.MolFromSmiles(reactant_smiles, sanitize=False) # CRITICAL that sanitize=False to avoid stripping
-            Chem.SanitizeMol(reactant_mol) # single, unified mol containing individual reactant as disconnected components
+            reactant_mol = sanitized_mol_from_smiles(reactant_smiles)
             
-            num_funct_groups = substructures.num_substruct_queries_distinct(reactant_mol, rxn.GetReactantTemplate(i))
+            num_funct_groups = num_substruct_queries_distinct(reactant_mol, rxn.GetReactantTemplate(i))
             functionalities.append(num_funct_groups)
             if num_funct_groups not in ALLOWED_FUNCTIONALITIES:
                 logger.error(f'Found {num_funct_groups} active functional groups (vs any from {ALLOWED_FUNCTIONALITIES}) for molecule {reactant_smiles}')
@@ -892,9 +908,31 @@ def main() -> None:
         '--project-path',
         type=Path,
         default=Path.cwd(),
-        # required=True,
+        required=True,
         help='Path to the directory in which the (presumed initialized) Signac project statepoints reside',
     ),
+    parser.add_argument( 
+        '-rxns',
+        '--rxn-mapping-path',
+        type=Path,
+        required=True,
+        help='The path to a JSON file containing a reaction name mapping\n' \
+            'Should contain dict whose keys are reaction names and whose values are reaction SMARTS strings'
+    )
+    parser.add_argument(
+        '-arom',
+        '--aromaticity-model',
+        choices=AromaticityModel.names.keys(),
+        default='AROMATICITY_MDL',
+        help='The aromaticity model to use when perceiving aromatic bonds',
+    )
+    parser.add_argument(
+        '-sanops',
+        '--sanitization-operations',
+        choices=SanitizeFlags.names.keys(),
+        default='SANITIZE_ALL',
+        help='The chemical cleanup operations to be performed any time a molecule is loaded from SMILES',
+    )
     parser.add_argument(
         '-qp',
         '--quantity-precision',
@@ -916,6 +954,13 @@ def main() -> None:
     # configure global vars in Project definition and initialize project instance
     PolymerBuildProject.QUANTITY_PRECISION = start_args.quantity_precision
     PolymerBuildProject.RELAXED_STEREO = not start_args.strict_stereo
+    PolymerBuildProject.REGISTERED_RXN_SMARTS = read_rxn_mapping_data(start_args.rxn_mapping_path)
+    
+    print(start_args.aromaticity_model, start_args.sanitization_operations)
+    ## NOTE: these will raise a KeyError if an invalid model name is provided
+    PolymerBuildProject.SANITIZE_OPS = SanitizeFlags.names[start_args.sanitization_operations]
+    PolymerBuildProject.AROMATICITY_MODEL = AromaticityModel.names[start_args.aromaticity_model]
+    
     # PolymerBuildProject.LOGLEVEL = ...
     logging.basicConfig(level=PolymerBuildProject.LOGLEVEL)
 
