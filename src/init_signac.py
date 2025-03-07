@@ -66,7 +66,6 @@ def generate_statepoints(args : Namespace) -> None:
     params_swept = ParametersSwept.from_file(args.parameters_swept).__dict__
     
     ## identify names of statepoint and metadata fields from provided monomer dataset
-    print(args.parameters_field)
     fields_not_in_df : set[str] = set(args.parameters_field).difference(monomer_df.columns)
     if any(fields_not_in_df):
         raise KeyError(f'The following requested statepoint fields not found in the provided monomer data file:\n{fields_not_in_df}')
