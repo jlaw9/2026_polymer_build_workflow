@@ -9,10 +9,11 @@ from ast import literal_eval
 
 from rdkit import Chem
 
-from polymerist.smileslib.primitives import is_valid_SMILES
+from polymerist.smileslib.cleanup import is_valid_SMILES, expanded_SMILES
 from polymerist.genutils.decorators.functional import allow_string_paths
 
-from polymerist.polymers.monomers import specification, MonomerGroup
+from polymerist.polymers.monomers import MonomerGroup
+from polymerist.polymers.monomers.specification import compliant_mol_SMARTS
 from polymerist.rdutils.reactions.reactors import PolymerizationReactor
 
 
@@ -72,8 +73,8 @@ def generate_smarts_fragments(reactants : Iterable[Chem.Mol], reactor : Polymeri
         for assoc_group_name, rdfragment in zip(ascii_uppercase, frags):
             # generate spec-compliant SMARTS
             raw_smiles = Chem.MolToSmiles(rdfragment)
-            exp_smiles = specification.expanded_SMILES(raw_smiles)
-            spec_smarts = specification.compliant_mol_SMARTS(exp_smiles)
+            exp_smiles = expanded_SMILES(raw_smiles)
+            spec_smarts = compliant_mol_SMARTS(exp_smiles)
 
             # record to monomer group
             affix = 'TERM' if MonomerGroup.is_terminal(rdfragment) else 'MID'

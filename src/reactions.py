@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 from rdkit import Chem
 
 from polymerist.genutils.fileutils.jsonio.jsonify import make_jsonifiable
-from polymerist.polymers.monomers.specification import expanded_SMILES
+from polymerist.smileslib.cleanup import expanded_SMILES
 
 from polymerist.rdutils.bonding import portlib
 from polymerist.rdutils.reactions.reactions import AnnotatedReaction
