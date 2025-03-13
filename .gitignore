@@ -8,7 +8,6 @@ plasticizer_project/**/*
 !plasticizer_project/generate_plasticizers.ipynb
 
 # testing files
-# testing.ipynb
 amine_symmetry.ipynb
 src/monomer_data/subsample_NIPU.csv
 *.job
@@ -22,6 +21,9 @@ openmm_testing.ipynb
 src/monomer_data
 src/reactions
 src/parameters
+
+# plot outputs
+molecule_sizes/*
 
 # benchmarks and profiling
 profile.csv
