@@ -320,6 +320,7 @@ everything = PolymerBuildProject.make_group(name='everything') # "master" group 
 ## 0) CHEMISTRY VALIDATION
 validate_chemistry = PolymerBuildProject.make_group(name='validate_chemistry')
 
+### CHECK IF VALIDATION STATUS IS KNOWN
 def atoms_validated(job : Job) -> bool:
     return 'has_banned_atom_types' in job.doc
 
@@ -329,37 +330,43 @@ def monomer_compositions_validated(job : Job) -> bool:
 def monomer_sizes_validated(job : Job) -> bool:
     return 'has_oversized_monomers' in job.doc
 
-def chemistry_validated(job : Job) -> bool: # NOTE: this might seem redundant at a glance, but enables delineation between unknown chemical status and KNOWN chemical invalidity
-    '''Check if chemistry prechecks have been done (i.e. status is not unknown)'''
-    return atoms_validated(job) \
-        and monomer_compositions_validated(job) \
-        and monomer_sizes_validated(job) \
-            
-def chemistry_passed(job : Job) -> bool:
+### CHECK IF VALIDATION STATUS IS KNOWN AND POSITIVE
+### NOTE: this might seem redundant at a glance (i.e. relateive to .get(...)), but enables delineation between unknown chemical status and KNOWN chemical invalidity
+def atoms_allowed(job : Job) -> bool:
+    '''Check whether it is known that no monomer atoms are banned'''
+    return atoms_validated(job) and not job.doc['has_banned_atom_types']
+
+def monomer_compositions_allowed(job : Job) -> bool:
+    '''Check whether it is known that no monomer compositions are banned'''
+    return monomer_compositions_validated(job) and not job.doc['has_banned_monomer_compositions']
+
+def monomer_sizes_allowed(job : Job) -> bool:
+    '''Check whether it is known that no monomers are too large'''
+    return monomer_sizes_validated(job) and not job.doc['has_oversized_monomers']
+        
+@PolymerBuildProject.label # NOTE: this label is NOT an accident; want to consolidate together passed chemistry into a single label, both internally and for HUD
+def chemistry_allowed(job : Job) -> bool:
     '''Check if all chemical checks have been passed in aggregate'''
-    return not ( # chemistry is valid IFF ALL of the below have been evaluated and are NOT found to be invalid
-        has_banned_atom_types(job) \
-        or has_banned_monomer_compositions(job) \
-        or has_oversized_monomers(job) \
+    return (
+        atoms_allowed(job) \
+        and monomer_compositions_allowed(job) \
+        and monomer_sizes_allowed(job)
     )
 
-### NOTE: found it less cluttered to indicate when chemical conditions are NOT met, rather than dsplay when ALL have passed
+### CHECK IF VALIDATION STATUS IS KNOWN AND NEGATIVE
+### NOTE: only these conditions are labelled to avoid status readout clutter (failures show up as they happen, rather than all successes being shown together)
 @PolymerBuildProject.label 
 def has_banned_atom_types(job : Job) -> bool:
-    return job.doc.get('has_banned_atom_types', False) # default to False if no substructure evaluation has been performed yet 
+    '''Check whether it is known that no monomer atoms as banned'''
+    return atoms_validated(job) and job.doc.has_banned_atom_types
 
 @PolymerBuildProject.label
 def has_banned_monomer_compositions(job : Job) -> bool:
-    return job.doc.get('has_banned_monomer_compositions', False) # default to False if no substructure evaluation has been performed yet 
+    return monomer_compositions_validated(job) and job.doc['has_banned_monomer_compositions']
 
 @PolymerBuildProject.label
 def has_oversized_monomers(job : Job) -> bool:
-    return job.doc.get('has_oversized_monomers', False) # default to False if no substructure evaluation has been performed yet 
-
-@PolymerBuildProject.label
-def chemistry_allowed(job : Job) -> bool:
-    '''Check if all chemical checks are KNOWN to be passing'''
-    return chemistry_validated(job) and chemistry_passed(job)
+    return monomer_sizes_validated(job) and job.doc['has_oversized_monomers']
 
 @everything
 @validate_chemistry
@@ -381,7 +388,7 @@ def validate_atoms(job : Job) -> None:
 
 @everything
 @validate_chemistry
-@PolymerBuildProject.pre.not_(has_banned_atom_types) # no point in checking monomer compositions if the more primitive atom type check fails
+@PolymerBuildProject.pre(atoms_allowed) # no point in checking monomer compositions if the more primitive atom type check fails
 @PolymerBuildProject.post(monomer_compositions_validated)
 @PolymerBuildProject.operation(directives={'walltime' : 1/60, 'np' : 1})
 def validate_monomer_compositions(job : Job) -> None:
@@ -400,7 +407,7 @@ def validate_monomer_compositions(job : Job) -> None:
 
 @everything
 @validate_chemistry
-@PolymerBuildProject.pre.not_(has_banned_monomer_compositions) 
+@PolymerBuildProject.pre(monomer_compositions_allowed) 
 @PolymerBuildProject.post(monomer_sizes_validated)
 @PolymerBuildProject.operation(directives={'walltime' : 1/60, 'np' : 1})
 def validate_monomer_sizes(job : Job) -> None:
@@ -449,6 +456,7 @@ def has_chemical_fragments(job : Job) -> bool:
 
 @everything
 @perceive_mechanism
+@PolymerBuildProject.pre.never # DEVNOTE: temporary stopgap to suppress old-style opeations while inserting new ones
 @PolymerBuildProject.pre(chemistry_allowed)
 @PolymerBuildProject.pre(labelled_mechanism_allowed)
 @PolymerBuildProject.post(reactant_order_evaluated)
@@ -477,6 +485,7 @@ def determine_reactant_order(job : Job) -> None:
 
 @everything
 @perceive_mechanism
+@PolymerBuildProject.pre.never # DEVNOTE: temporary stopgap to suppress old-style opeations while inserting new ones
 @PolymerBuildProject.pre(chemistry_allowed)
 @PolymerBuildProject.pre(labelled_mechanism_allowed)
 @PolymerBuildProject.pre(matches_rxn_template)
