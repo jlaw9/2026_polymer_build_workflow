@@ -1,8 +1,6 @@
 '''Define and cache reaction templates for polymerization procedure'''
 
 import logging
-logging.basicConfig(level=logging.INFO)
-
 from typing import Sequence, Optional
 
 from pathlib import Path
@@ -26,6 +24,9 @@ try: # call as python module
 except ImportError: # call as script file
     from __init__ import _parent_dir
     from utils.logs import format_error_for_log
+    
+RXNS_DIR = _parent_dir / 'reactions'
+RXNS_DIR.mkdir(exist_ok=True)
 
 
 # INITIALIZING SMARTS FOR FUNCTIONAL GROUPS
@@ -195,12 +196,10 @@ for i, (rxnname, rxninfo) in enumerate(rxn_inputs.items(), start=1):
         test_reactants.append(reactant_mol)
     test_reactants_catalogue[rxnname] = [Chem.Mol(reactant) for reactant in test_reactants]
     
-
+# ASSEMBLING AND TESTING REACTIONS
 if __name__ == '__main__':
-    RXNS_DIR = _parent_dir / 'reactions'
-    RXNS_DIR.mkdir(exist_ok=True)
-
-    # ASSEMBLING AND TESTING REACTIONS
+    logging.basicConfig(level=logging.INFO, force=True)
+    
     rxns : dict[str, AnnotatedReaction] = {}
     rxn_smarts : dict[str, str] = {}
 
