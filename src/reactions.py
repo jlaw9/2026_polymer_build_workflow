@@ -15,7 +15,6 @@ from polymerist.smileslib.cleanup import expanded_SMILES
 
 from polymerist.rdutils.bonding import portlib
 from polymerist.rdutils.reactions.reactions import AnnotatedReaction
-from polymerist.rdutils.reactions.reactors import PolymerizationReactor
 from polymerist.rdutils.reactions.assembly import ReactionAssembler
 
 try: # call as python module
@@ -218,8 +217,7 @@ if __name__ == '__main__':
         logging.info('Validating reaction template on test reactants')
         test_reactants = test_reactants_catalogue[rxnname]
         try:
-            reactor = PolymerizationReactor(rxn)
-            products = reactor.react(test_reactants)
+            products = rxn.react(test_reactants)
             logging.info('VALIDATION SUCCESSFUL: Reaction and test reactants are compatible')
         except Exception as error: # TODO: make this more granular
             logging.error(format_error_for_log(error))
