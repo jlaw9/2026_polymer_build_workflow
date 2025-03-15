@@ -444,6 +444,11 @@ def autopolymerization_detected(job : Job) -> bool:
     '''Whether the single, perceived mechanism was explicitly deemed to be an autopolymerization'''
     return job.doc.get('is_autopolymerization') is True #also handle NoneType case if unassigned
 
+@PolymerBuildProject.label
+def copolymer_sequence_kernel_assigned(job : Job) -> bool:
+    '''Whether a copolymer sequence kernel has been assigned'''
+    return 'copolymer_sequence_kernel' in job.doc
+
 @everything
 @perceive_mechanism
 @PolymerBuildProject.pre(chemistry_allowed)
@@ -517,29 +522,27 @@ def detect_autopolymerization(job : Job) -> None:
         if is_autopolymerization:
             logging.info(f'Perceived reaction mechanism detected to act via an autopolymerization pathway')
 
-
-## 2) ENUMERATE REPEAT UNIT FRAGMENTS
-fragment = PolymerBuildProject.make_group(name='fragment')
-
-def copolymer_sequence_kernel_assigned(job : Job) -> bool:
-    '''Whether a copolymer sequence kernel has been assigned'''
-    return 'copolymer_sequence_kernel' in job.doc
-
-@PolymerBuildProject.label
-def has_chemical_fragments(job : Job) -> bool:
-    '''Check if repeat unit fragments from reaction enumeration have been cached'''
-    return has_nonempty_file(job, PolymerBuildProject.FRAGMENTS_PATH)
-
 @everything
-@fragment
-@PolymerBuildProject.pre.never # BOOKMARK; PICK UP HERE!!
+@perceive_mechanism
 @PolymerBuildProject.pre(autopolymerization_assigned)
 @PolymerBuildProject.post(copolymer_sequence_kernel_assigned)
 @PolymerBuildProject.operation(directives={'walltime' : 1/60, 'np' : 1})
 def assign_copolymer_sequence_kernel(job : Job) -> None:
     '''Assign a sequence representing the minimal repeating set of monomer fragments in a repeat unit (e.g. N x [AB])
     based on the perceived rxn mechanism and whether it is an autopolymerization reaction'''
-    ...
+    with redirect_job_to_logfile(job) as logger:
+        copolymer_sequence_kernel = 'A' if job.doc.is_autopolymerization else 'BA'  # sequence of middle monomers AFTER head group (i.e. |A-[BA]n-B|)
+        logger.info(f'Assigned copolymer sequence kernel of "[{copolymer_sequence_kernel}]" for linear polymer build')
+        job.doc['copolymer_sequence_kernel'] = copolymer_sequence_kernel
+
+
+## 2) ENUMERATE REPEAT UNIT FRAGMENTS
+fragment = PolymerBuildProject.make_group(name='fragment')
+
+@PolymerBuildProject.label
+def has_chemical_fragments(job : Job) -> bool:
+    '''Check if repeat unit fragments from reaction enumeration have been cached'''
+    return has_nonempty_file(job, PolymerBuildProject.FRAGMENTS_PATH)
 
 @everything
 @fragment
@@ -612,10 +615,11 @@ def build_oligomer_pdb(job : Job) -> None:
                 break
 
         # generate coordinates with mBuild hook
+        copolymer_sequence_kernel = job.doc.copolymer_sequence_kernel # REVISIT THIS FOR EXISTENCE AND PRECONDITION
         polymer = build_linear_polymer(
             monomers=monogrp,
-            n_monomers=(job.sp.DOP*len(job.sp.copolymer_sequence)), # interpret DOP here as number of monomer sequence repeats (including end groups)
-            sequence=job.sp.copolymer_sequence, # DEV: for now, fixed as "BA" for all mechanisms; TODO: find way to set this as a function of mechanism in setup
+            n_monomers=(job.sp.DOP*len(copolymer_sequence_kernel)), # interpret DOP here as number of monomer sequence repeats (including end groups)
+            sequence=copolymer_sequence_kernel, # DEV: for now, fixed as "BA" for all mechanisms; TODO: find way to set this as a function of mechanism in setup
             energy_minimize=True, # TODO: add master config option for energy minimization at project level
         )
         mbmol_to_openmm_pdb(job.fn(PolymerBuildProject.OLIGOMER_PDB), polymer)
