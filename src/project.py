@@ -18,6 +18,25 @@ from pathlib import Path
 
 import numpy as np
 
+# Signac
+from signac.job import Job
+from flow import FlowProject
+
+# Cheminformatics
+from rdkit import Chem
+from rdkit.Chem.rdmolops import AromaticityModel, SanitizeFlags
+from rdkit.Chem.rdqueries import XAtomQueryAtom, MAtomQueryAtom, AtomNumEqualsQueryAtom
+
+# OpenMM
+from openmm import LangevinMiddleIntegrator
+from openmm import Context, XmlSerializer
+
+from openmm.unit import (
+    Quantity as OMMQuantity,
+    Unit as OMMUnit,
+)
+from openmm.unit import femtosecond, picosecond, kelvin, kilojoule_per_mole
+
 # OpenFF toolkits
 from openff.toolkit import Molecule, Topology, ForceField
 from openff.toolkit.utils.exceptions import (
@@ -44,26 +63,7 @@ from openff.units import (
 
 from openff.interchange import Interchange
 
-# Cheminformatics
-from rdkit import Chem
-from rdkit.Chem.rdmolops import AromaticityModel, SanitizeFlags
-from rdkit.Chem.rdqueries import XAtomQueryAtom, MAtomQueryAtom, AtomNumEqualsQueryAtom
-
-# OpenMM imports
-from openmm import LangevinMiddleIntegrator
-from openmm import Context, XmlSerializer
-
-from openmm.unit import (
-    Quantity as OMMQuantity,
-    Unit as OMMUnit,
-)
-from openmm.unit import femtosecond, picosecond, kelvin, kilojoule_per_mole
-
-# Signac imports
-from signac.job import Job
-from flow import FlowProject
-
-# Custom (polymerist) imports
+# Custom (polymerist)
 import polymerist as ps
 from polymerist.genutils.logutils.IOHandlers import submodule_loggers, get_active_loggers
 POLYMERIST_LOGGERS = [
@@ -101,6 +101,8 @@ try: # call as python module
     from .utils.offlib import elem_counts
     from .utils.packing import generate_uniform_subpopulated_lattice
     from .utils.mdexport import interchange_to_openmm
+    from .utils.jobhooks import ProjectHooks
+
     from .reactions import RXNS_DIR
     from .environments.cuboulder import CUAlpineEnvironment, CUBlancaShirtsEnvironment # inject CURC-specific environment config
 except ImportError: # call as script file
@@ -111,6 +113,8 @@ except ImportError: # call as script file
     from utils.offlib import elem_counts
     from utils.packing import generate_uniform_subpopulated_lattice
     from utils.mdexport import interchange_to_openmm
+    from utils.jobhooks import ProjectHooks
+
     from reactions import RXNS_DIR
     from environments.cuboulder import CUAlpineEnvironment, CUBlancaShirtsEnvironment # inject CURC-specific environment config
 
@@ -120,7 +124,7 @@ class PolymerBuildProject(FlowProject):
     '''Project for automated high-throughput generation of polymer structure and MD inputs from chemical data'''
     # GLOBAL CONFIG - TODO: make these configuratble via argparse to the containing script
     ## LOGGING AND REPORTING FORMATS
-    QUANTITY_PRECISION  : ClassVar[int] = 4 # number of decimal place to report Quantities when logging
+    QUANTITY_PRECISION  : ClassVar[int] = 4 # number of decimal places to report Quantities when logging
     LOGLEVEL            : ClassVar[int] = logging.INFO
     ENERGY_UNIT         : ClassVar[OMMUnit] = kilojoule_per_mole 
     OP_TIME_RECORD_NAME : ClassVar[str] = 'operation_times_sec'
@@ -132,34 +136,19 @@ class PolymerBuildProject(FlowProject):
     AROMATICITY_MODEL   : ClassVar[AromaticityModel] = AromaticityModel.AROMATICITY_MDL
     REGISTERED_RXNS     : ClassVar[dict[str, AnnotatedReaction]] = {}
     
-    ## ATOMS AND MONOMERS WHICH ARE, FOR ONE REASON OR ANOTHER, NOT ALLOWED
-    BLACKLISTED_ATOM_QUERIES : ClassVar[dict[str, Chem.QueryAtom]] = {
-        'boron'      : AtomNumEqualsQueryAtom(5, negate=False),
-        'silicon'    : AtomNumEqualsQueryAtom(14, negate=False),
-        # 'phosphorus' : AtomNumEqualsQueryAtom(15, negate=False),
-        'sulfur'     : AtomNumEqualsQueryAtom(16, negate=False),
-        'metal'      : MAtomQueryAtom(),
-        # 'halogen'    : XAtomQueryAtom(),
-    }
+    ### ATOMS AND MONOMERS WHICH ARE, FOR ONE REASON OR ANOTHER, NOT ALLOWED
+    BLACKLISTED_ATOM_QUERIES : ClassVar[dict[str, Chem.QueryAtom]] = {}
+    BLACKLISTED_MONOMER_MOLS : ClassVar[dict[str, Chem.Mol]] = {}
     
-    # DEVNOTE: one would think this could be automated by setting a cap on the number of automorphisms, but this cap grows far too quickly
-    # with the computational cost of evaluating those automorhpisms (via cap on number of substruct matches) to be work it
-    _blacklisted_monomer_smiles : ClassVar[tuple[str]] = ( # monomers which are, for one reason or another, disallowed
-        'CC(C)(C)c1cc(c(Oc2ccc(cc2)N(c3ccc(N)cc3)c4ccc(N)cc4)c(c1)C(C)(C)C)C(C)(C)C',  # the extraordinary number of symmetries of this amine ("4-N-(4-aminophenyl)-4-N-[4-(2,4,6-tritert-butylphenoxy)phenyl]benzene-1,4-diamine")... 
-        'CC(C)(C)c1cc(Oc2ccc(-c3ccc(N)cc3)cc2C(F)(F)F)c(C(C)(C)C)cc1Oc1ccc(-c2ccc(N)cc2)cc1C(F)(F)F', # ...mean it takes impractically long to isomorphism match during the Topology partition step
-        'CCCCCCCCCCCCCCCCC(CO)C(CO)CCCCCCCCCCCCCCCC',
-    )
-    
-    @classmethod
-    @property
-    def BLACKLISTED_MONOMER_MOLS(cls) -> dict[str, Chem.Mol]:
-        return {
-            smiles : PolymerBuildProject.sanitized_mol_from_smiles(
-                expanded_SMILES(smiles, assign_map_nums=False),
-                separate_mols=False,  # though single-molecules, need to separate to avoid tuple mis-type
-            )
-                for smiles in cls._blacklisted_monomer_smiles
-        }
+    @classmethod # inject configure chemical sanitization setting
+    def sanitized_mol_from_smiles(cls, smiles : str, separate_mols : bool=True) -> Union[Chem.Mol, tuple[Chem.Mol]]:
+        '''Load a mol from SMILES and apply the predefined sanitization and aromaticity operations'''
+        mol = Chem.MolFromSmiles(smiles, sanitize=False) # CRITICAL that sanitize=False to avoid stripping
+        sanitize_mol(mol, sanitize_ops=cls.SANITIZE_OPS, aromaticity_model=cls.AROMATICITY_MODEL, in_place=True)
+        
+        if separate_mols:
+            return Chem.GetMolFrags(mol, asMols=True)
+        return mol
     
     # PROJECT-WIDE FILE NAMES
     ## STRUCTURE FILES
@@ -194,17 +183,32 @@ class PolymerBuildProject(FlowProject):
     )
     OPENMM_ENERGIES     : ClassVar[str] = f'{OPENMM_DIR}/energies_openmm.json' # NOTE: deliberately NOT be lumped w/ MD input files
     
-    @classmethod
-    def sanitized_mol_from_smiles(cls, smiles : str, separate_mols : bool=True) -> Union[Chem.Mol, tuple[Chem.Mol]]:
-        '''Load a mol from SMILES and apply the predefined sanitization and aromaticity operations'''
-        mol = Chem.MolFromSmiles(smiles, sanitize=False) # CRITICAL that sanitize=False to avoid stripping
-        sanitize_mol(mol, sanitize_ops=cls.SANITIZE_OPS, aromaticity_model=cls.AROMATICITY_MODEL, in_place=True)
-        
-        if separate_mols:
-            return Chem.GetMolFrags(mol, asMols=True)
-        return mol
+## POPULATING BANNED CHEMICAL QUERIES INTO CLASS-LEVEL DATA FOR PROJECT
+PolymerBuildProject.BLACKLISTED_ATOM_QUERIES = {
+    'boron'      : AtomNumEqualsQueryAtom(5, negate=False),
+    'silicon'    : AtomNumEqualsQueryAtom(14, negate=False),
+    # 'phosphorus' : AtomNumEqualsQueryAtom(15, negate=False),
+    'sulfur'     : AtomNumEqualsQueryAtom(16, negate=False),
+    'metal'      : MAtomQueryAtom(),
+    # 'halogen'    : XAtomQueryAtom(),
+}
     
-    
+# DEVNOTE: one would think this could be automated by setting a cap on the number of automorphisms, but this cap grows far too quickly
+# with the computational cost of evaluating those automorhpisms (via cap on number of substruct matches) to be work it
+_blacklisted_monomer_smiles : tuple[str] = ( # monomers which are, for one reason or another, disallowed
+    'CC(C)(C)c1cc(c(Oc2ccc(cc2)N(c3ccc(N)cc3)c4ccc(N)cc4)c(c1)C(C)(C)C)C(C)(C)C',  # the extraordinary number of symmetries of this amine ("4-N-(4-aminophenyl)-4-N-[4-(2,4,6-tritert-butylphenoxy)phenyl]benzene-1,4-diamine")... 
+    'CC(C)(C)c1cc(Oc2ccc(-c3ccc(N)cc3)cc2C(F)(F)F)c(C(C)(C)C)cc1Oc1ccc(-c2ccc(N)cc2)cc1C(F)(F)F', # ...mean it takes impractically long to isomorphism match during the Topology partition step
+    'CCCCCCCCCCCCCCCCC(CO)C(CO)CCCCCCCCCCCCCCCC',
+)
+
+PolymerBuildProject.BLACKLISTED_MONOMER_MOLS = {
+    smiles : PolymerBuildProject.sanitized_mol_from_smiles(
+        expanded_SMILES(smiles, assign_map_nums=False),
+        separate_mols=False,  # though single-molecules, need to separate to avoid tuple mis-type
+    )
+        for smiles in _blacklisted_monomer_smiles
+}
+
 # PROJECT-SPECIFIC JOB HELPER FUNCTIONS
 ## JOB LOGGING
 def redirect_job_to_logfile(job : Job) -> logging.Logger:
@@ -216,22 +220,6 @@ def redirect_job_to_logfile(job : Job) -> logging.Logger:
         aux_loggers=POLYMERIST_LOGGERS, # make this all loggers?
         # aux_loggers=get_active_loggers(), # get EVERY active logger registered across all Python modules
     )
-
-## JOB HOOKS
-def record_operation_start_time(operation_name : str, job : Job) -> None:
-    '''Record into the job document when a particular operation began'''
-    job.doc.setdefault(PolymerBuildProject.OP_TIME_RECORD_NAME, {})
-    job.doc[PolymerBuildProject.OP_TIME_RECORD_NAME].update({f'{operation_name}_start' : time.time()})
-
-def record_operation_duration(operation_name : str, job : Job) -> None:
-    '''Record into the job document how long a particular operation took'''
-    op_times = job.doc.get(PolymerBuildProject.OP_TIME_RECORD_NAME, {})
-    start_time = op_times.pop(f'{operation_name}_start') # look up and withdraw start time
-    if start_time is None: # NOTE: dicts in Signac documents are NOT pure Python dicts; their "pop()" method returns None by default and never raises KeyError
-        raise ValueError(f'No start time recorded for operation "{operation_name}"; cannot calculate operation duration')
-    
-    op_duration = time.time() - start_time
-    job.doc[PolymerBuildProject.OP_TIME_RECORD_NAME].update({operation_name : op_duration})
 
 ## HELPERS FOR OBTAINING OBJECTS BASED ON JOB DATA
 def has_nonempty_file(job : Job, filename : str) -> bool:
@@ -1041,6 +1029,13 @@ def main() -> None:
         help='The number of decimal places to which to display and log physical and numeric quantities',
     )
     parser.add_argument(
+        '-ind',
+        '--indent',
+        type=int,
+        default=4,
+        help='The number of spaces to indent each record in all Job statepoint and document files project-wide'
+    ) # TOSELF: consider also making doc.sp indentation operations to allow them to be invoked at any time?
+    parser.add_argument(
         '-arom',
         '--aromaticity-model',
         choices=AromaticityModel.names.keys(),
@@ -1077,9 +1072,8 @@ def main() -> None:
     PolymerBuildProject.RELAXED_STEREO = not start_args.strict_stereo
     
     PolymerBuildProject.N_ATOM_CAP_MONOMER = start_args.n_atom_cap
-    ## NOTE: these will raise a KeyError if an invalid model name is provided
-    PolymerBuildProject.SANITIZE_OPS = SanitizeFlags.names[start_args.sanitization_operations]
-    PolymerBuildProject.AROMATICITY_MODEL = AromaticityModel.names[start_args.aromaticity_model]
+    PolymerBuildProject.SANITIZE_OPS = SanitizeFlags.names[start_args.sanitization_operations]   # will raise KeyError on invalid flag names
+    PolymerBuildProject.AROMATICITY_MODEL = AromaticityModel.names[start_args.aromaticity_model] # will raise KeyError on invalid flag names
 
     PolymerBuildProject.REGISTERED_RXNS = {} # initialize predefined reactions
     for rxnname, rxn_smarts in read_rxn_mapping_data(start_args.rxn_mapping_path).items():
@@ -1093,16 +1087,15 @@ def main() -> None:
     # PolymerBuildProject.LOGLEVEL = ...
     logging.basicConfig(level=PolymerBuildProject.LOGLEVEL, force=True)
 
+    # initialize Project instance for interpreter session
+    project_hooks = ProjectHooks(operation_times_attr='operation_times_sec', indent_amount=start_args.indent)
     new_project = PolymerBuildProject(
         path=start_args.project_path,
         entrypoint={
             'path' : __file__,
         }
     )
-    # register project-level hooks
-    new_project.project_hooks.on_start = [record_operation_start_time]
-    new_project.project_hooks.on_exit  = [record_operation_duration  ]
-    # new_project.project_hooks.on_exception = ... # TODO: add distinct timing mode for cases where operations fail before exit
+    new_project = project_hooks.install_hooks(new_project)
 
     # mock remaining Signac args for parser and run Project's shell interface
     sys.argv[1:] = signac_args # NOTE: this is an ugly hack to allow this script to take CLI args while not disturbing Signacs tastes for arguments
