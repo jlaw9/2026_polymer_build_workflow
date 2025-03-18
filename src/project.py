@@ -132,6 +132,7 @@ class PolymerBuildProject(FlowProject):
     ## CHEMICAL SPECIFICATION
     RELAXED_STEREO      : ClassVar[bool] = True
     N_ATOM_CAP_MONOMER  : ClassVar[int] = 150
+    N_MONOMER_CAP       : ClassVar[int] = 2
     SANITIZE_OPS        : ClassVar[SanitizeFlags] = SanitizeFlags.SANITIZE_ALL
     AROMATICITY_MODEL   : ClassVar[AromaticityModel] = AromaticityModel.AROMATICITY_MDL
     REGISTERED_RXNS     : ClassVar[dict[str, AnnotatedReaction]] = {}
@@ -303,49 +304,101 @@ def atoms_validated(job : Job) -> bool:
 def monomer_compositions_validated(job : Job) -> bool:
     return 'has_banned_monomer_compositions' in job.doc
 
+def monomer_counts_validated(job : Job) -> bool:
+    return 'has_too_many_monomers' in job.doc
+
 def monomer_sizes_validated(job : Job) -> bool:
     return 'has_oversized_monomers' in job.doc
 
 ### CHECK IF VALIDATION STATUS IS KNOWN AND POSITIVE
 ### NOTE: this might seem redundant at a glance (i.e. relative to .get(...)), but enables delineation between unknown chemical status and KNOWN chemical invalidity
 def atoms_allowed(job : Job) -> bool:
-    '''Check whether it is known that no monomer atoms are banned'''
+    '''Check whether it is known that monomer atoms are NOT banned'''
     return atoms_validated(job) and not job.doc['has_banned_atom_types']
 
 def monomer_compositions_allowed(job : Job) -> bool:
-    '''Check whether it is known that no monomer compositions are banned'''
+    '''Check whether it is known that monomer compositions are NOT banned'''
     return monomer_compositions_validated(job) and not job.doc['has_banned_monomer_compositions']
 
+def monomer_counts_allowed(job : Job) -> bool:
+    '''Check whether it is known that a chemical input has sufficiently few distinct monomers'''
+    return monomer_counts_validated(job) and not job.doc['has_too_many_monomers']
+
 def monomer_sizes_allowed(job : Job) -> bool:
-    '''Check whether it is known that no monomers are too large'''
+    '''Check whether it is known that monomers are NOT too large'''
     return monomer_sizes_validated(job) and not job.doc['has_oversized_monomers']
         
 @PolymerBuildProject.label # NOTE: this label is NOT an accident; want to consolidate together passed chemistry into a single label, both internally and for HUD
 def chemistry_allowed(job : Job) -> bool:
     '''Check if all chemical checks have been passed in aggregate'''
     return (
-        atoms_allowed(job) \
-        and monomer_compositions_allowed(job) \
+        monomer_counts_allowed \
         and monomer_sizes_allowed(job)
+        and atoms_allowed(job) \
+        and monomer_compositions_allowed(job) \
     )
 
 ### CHECK IF VALIDATION STATUS IS KNOWN AND NEGATIVE
 ### NOTE: only these conditions are labelled to avoid status readout clutter (failures show up as they happen, rather than all successes being shown together)
 @PolymerBuildProject.label 
 def has_banned_atom_types(job : Job) -> bool:
-    '''Check whether it is known that no monomer atoms as banned'''
+    '''Check whether it is known that monomer atoms ARE banned'''
     return atoms_validated(job) and job.doc.has_banned_atom_types
 
 @PolymerBuildProject.label
 def has_banned_monomer_compositions(job : Job) -> bool:
+    '''Check whether it is known that monomer compositions ARE banned'''
     return monomer_compositions_validated(job) and job.doc['has_banned_monomer_compositions']
 
 @PolymerBuildProject.label
+def has_too_many_monomers(job : Job) -> bool:
+    '''Check whether it is known that a chemical input has too many distinct monomers'''
+    return monomer_counts_allowed(job) and job.doc['has_too_many_monomers']
+
+@PolymerBuildProject.label
 def has_oversized_monomers(job : Job) -> bool:
+    '''Check whether it is known that monomers ARE too large'''
     return monomer_sizes_validated(job) and job.doc['has_oversized_monomers']
+
+### Sequential validation operations - cheapest done first
+@everything
+@validate_chemistry
+@PolymerBuildProject.post(monomer_counts_validated)
+@PolymerBuildProject.operation(directives={'walltime' : 1/60, 'np' : 1})
+def validate_monomer_counts(job : Job) -> None:
+    '''Check that none of the monomer input molecules are larger than the prescribed limit'''
+    monomers = load_job_rdmol(job, separate_mols=True) # NOTE: here we DO need to separate, since we are looking at the number of individual molecules
+    with redirect_job_to_logfile(job) as logger:
+        logger.info('Checking for superfluous monomers')
+        if (n_monomers := len(monomers)) > PolymerBuildProject.N_MONOMER_CAP:
+            logger.error(f'Detected superfluous monomers ({n_monomers} distinct monomers provided relative to the prescribed {PolymerBuildProject.N_MONOMER_CAP}-monomer cutoff)')
+            job.doc['has_too_many_monomers'] = True
+        else:
+            logger.info('Number of monomers not found to be in excess')
+            job.doc['has_too_many_monomers'] = False
+            
+@everything
+@validate_chemistry
+@PolymerBuildProject.pre(monomer_counts_allowed) 
+@PolymerBuildProject.post(monomer_sizes_validated)
+@PolymerBuildProject.operation(directives={'walltime' : 1/60, 'np' : 1})
+def validate_monomer_sizes(job : Job) -> None:
+    '''Check that none of the monomer input molecules are larger than the prescribed limit'''
+    monomers = load_job_rdmol(job, separate_mols=True) # NOTE: here we DO need to separate, since we are looking at the sizes of individual molecules
+    with redirect_job_to_logfile(job) as logger:
+        logger.info('Searching for oversized monomers')
+        for monomer in monomers:
+            if (n_atoms := monomer.GetNumAtoms()) > PolymerBuildProject.N_ATOM_CAP_MONOMER:
+                logger.error(f'Detected oversized monomer (containing {n_atoms} atoms relative to the prescribed {PolymerBuildProject.N_ATOM_CAP_MONOMER}-atom cutoff)')
+                job.doc['has_oversized_monomers'] = True
+                break
+        else:
+            logger.info('No oversized monomers detected')
+            job.doc['has_oversized_monomers'] = False
 
 @everything
 @validate_chemistry
+@PolymerBuildProject.pre(monomer_sizes_allowed)
 @PolymerBuildProject.post(atoms_validated)
 @PolymerBuildProject.operation(directives={'walltime' : 1/60, 'np' : 1})
 def validate_atoms(job : Job) -> None:
@@ -361,7 +414,7 @@ def validate_atoms(job : Job) -> None:
         else:
             job.doc['has_banned_atom_types'] = False
             logger.info('No banned atom types detected')
-
+            
 @everything
 @validate_chemistry
 @PolymerBuildProject.pre(atoms_allowed) # no point in checking monomer compositions if the more primitive atom type check fails
@@ -381,25 +434,6 @@ def validate_monomer_compositions(job : Job) -> None:
             job.doc['has_banned_monomer_compositions'] = False
             logger.info('No banned monomer compositions detected')
 
-@everything
-@validate_chemistry
-@PolymerBuildProject.pre(monomer_compositions_allowed) 
-@PolymerBuildProject.post(monomer_sizes_validated)
-@PolymerBuildProject.operation(directives={'walltime' : 1/60, 'np' : 1})
-def validate_monomer_sizes(job : Job) -> None:
-    '''Check that none of the monomer input molecules are larger than the prescribed limit'''
-    monomers = load_job_rdmol(job, separate_mols=False), # NOTE: here we DO need to separate, since we are looking at the sizes of individual molecules
-    with redirect_job_to_logfile(job) as logger:
-        logger.info('Searching for oversized monomers')
-        for monomer in monomers:
-            if (n_atoms := monomer.GetNumAtoms()) > PolymerBuildProject.N_ATOM_CAP_MONOMER:
-                logger.error(f'Detected oversized monomer (containing {n_atoms} atoms relative to the prescribed {PolymerBuildProject.N_ATOM_CAP_MONOMER}-atom cutoff)')
-                job.doc['has_oversized_monomers'] = True
-                break
-        else:
-            logger.info('No oversized monomers detected')
-            job.doc['has_oversized_monomers'] = False
-    
     
 ## 1) REACTANT AND MECHANISM PERCEPTION
 perceive_mechanism = PolymerBuildProject.make_group(name='perceive_mechanism')
