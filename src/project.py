@@ -13,8 +13,9 @@ from argparse import ArgumentParser, Namespace
 from typing import ClassVar, Iterable, Optional, Union
 
 import pickle, json
-from functools import partial
 from pathlib import Path
+from functools import partial
+from collections import Counter
 
 import numpy as np
 
@@ -73,6 +74,7 @@ POLYMERIST_LOGGERS = [
 ] # TODO: move this into polymerist?
 
 from polymerist.polymers.monomers import MonomerGroup
+from polymerist.polymers.monomers.specification import compliant_mol_SMARTS
 from polymerist.polymers.building import build_linear_polymer, mbmol_to_openmm_pdb
 
 from polymerist.mdtools.openfftools import topology, boxvectors
@@ -85,10 +87,12 @@ from polymerist.mdtools.openmmtools.evaluation import eval_openmm_energies_separ
 from polymerist.mdtools.lammpstools.lammpseval import get_lammps_energies
 
 from polymerist.rdutils.rdcoords.tiling import rdmol_effective_radius
+from polymerist.rdutils.sanitization import sanitize_mol
+from polymerist.rdutils.bonding.portlib import get_num_linkers
+
 from polymerist.rdutils.reactions.reactions import AnnotatedReaction, BadNumberReactants
 from polymerist.rdutils.reactions.reactors import PolymerizationReactor
-from polymerist.rdutils.substructures import num_substruct_queries_distinct
-from polymerist.rdutils.sanitization import sanitize_mol
+from polymerist.rdutils.reactions.fragment import CutMinimumCostBondsStrategy
 
 from polymerist.smileslib.cleanup import expanded_SMILES
 
@@ -96,7 +100,6 @@ from polymerist.smileslib.cleanup import expanded_SMILES
 try: # call as python module
     from .utils.logs import redirect_to_logfile
     from .utils.filelib import is_empty
-    from .utils.cheminf import generate_smarts_fragments
     from .utils.dataIO import read_rxn_mapping_data
     from .utils.offlib import elem_counts
     from .utils.packing import generate_uniform_subpopulated_lattice
@@ -108,7 +111,6 @@ try: # call as python module
 except ImportError: # call as script file
     from utils.logs import redirect_to_logfile
     from utils.filelib import is_empty
-    from utils.cheminf import generate_smarts_fragments
     from utils.dataIO import read_rxn_mapping_data
     from utils.offlib import elem_counts
     from utils.packing import generate_uniform_subpopulated_lattice
@@ -130,9 +132,12 @@ class PolymerBuildProject(FlowProject):
     OP_TIME_RECORD_NAME : ClassVar[str] = 'operation_times_sec'
     
     ## CHEMICAL SPECIFICATION
-    RELAXED_STEREO      : ClassVar[bool] = True
-    N_ATOM_CAP_MONOMER  : ClassVar[int] = 150
-    N_MONOMER_CAP       : ClassVar[int] = 2
+    RELAXED_STEREO      : ClassVar[bool] = True # whether or not fuss with stereochemistry
+    N_ATOM_CAP_MONOMER  : ClassVar[int] = 150   # max number of atoms per monomer in a chemical input
+    N_MONOMER_CAP       : ClassVar[int] = 2     # max number of monomers per chemical input
+    MONOMER_PREFIX      : ClassVar[str] = 'M'   # prefix name to assign to all monomers
+    ALLOWED_FUNCTIONALITIES : set[int] = {1, 2} # functionalities of repeat unit permitted to be used in oligomer assembly
+    
     SANITIZE_OPS        : ClassVar[SanitizeFlags] = SanitizeFlags.SANITIZE_ALL
     AROMATICITY_MODEL   : ClassVar[AromaticityModel] = AromaticityModel.AROMATICITY_MDL
     REGISTERED_RXNS     : ClassVar[dict[str, AnnotatedReaction]] = {}
@@ -153,29 +158,32 @@ class PolymerBuildProject(FlowProject):
     
     # PROJECT-WIDE FILE NAMES
     ## STRUCTURE FILES
-    LOGFILE_NAME        : ClassVar[str] = 'build_logs.log'
-    FRAGMENTS_PATH      : ClassVar[str] = 'fragments.json'
-    OLIGOMER_PDB        : ClassVar[str] = 'oligomer.pdb'
-    OLIGOMER_SDF        : ClassVar[str] = 'oligomer.sdf'
-    MELT_NEAT_SDF       : ClassVar[str] = 'melt_neat.sdf'
-    INTERCHANGE_PATH    : ClassVar[str] = 'interchange.pkl'
+    LOGFILE_NAME : ClassVar[str] = 'build_logs.log'
+    
+    ALL_FRAGMENTS_PATH      : ClassVar[str] = 'fragments_all.json'
+    OLIGOMER_FRAGMENTS_PATH : ClassVar[str] = 'fragments_oligomer.json'
+    
+    OLIGOMER_PDB     : ClassVar[str] = 'oligomer.pdb'
+    OLIGOMER_SDF     : ClassVar[str] = 'oligomer.sdf'
+    MELT_NEAT_SDF    : ClassVar[str] = 'melt_neat.sdf'
+    INTERCHANGE_PATH : ClassVar[str] = 'interchange.pkl'
 
     # LAMMPS
-    LAMMPS_DIR          : ClassVar[str] = 'LAMMPS'
-    LAMMPS_INPUT_PATH   : ClassVar[str] = f'{LAMMPS_DIR}/inputs.in'
-    LAMMPS_DATA_PATH    : ClassVar[str] = f'{LAMMPS_DIR}/data.lmp'
+    LAMMPS_DIR        : ClassVar[str] = 'LAMMPS'
+    LAMMPS_INPUT_PATH : ClassVar[str] = f'{LAMMPS_DIR}/inputs.in'
+    LAMMPS_DATA_PATH  : ClassVar[str] = f'{LAMMPS_DIR}/data.lmp'
     LAMMPS_PATHS : ClassVar[list[str]] = (
         LAMMPS_INPUT_PATH,
         LAMMPS_DATA_PATH,
     )
-    LAMMPS_ENERGIES     : ClassVar[str] = f'{LAMMPS_DIR}/energies_lammps.json' # NOTE: deliberately NOT be lumped w/ MD input files
+    LAMMPS_ENERGIES : ClassVar[str] = f'{LAMMPS_DIR}/energies_lammps.json' # NOTE: deliberately NOT be lumped w/ MD input files
 
     ## OpenMM
-    OPENMM_DIR          : ClassVar[str] = 'OpenMM'
-    OPENMM_STATE_PATH   : ClassVar[str] = f'{OPENMM_DIR}/state.xml'
-    OPENMM_SYSTEM_PATH  : ClassVar[str] = f'{OPENMM_DIR}/system.xml'
-    OPENMM_TOPO_PATH    : ClassVar[str] = f'{OPENMM_DIR}/topology.pdb'
-    OPENMM_INTEG_PATH   : ClassVar[str] = f'{OPENMM_DIR}/integrator.xml'
+    OPENMM_DIR         : ClassVar[str] = 'OpenMM'
+    OPENMM_STATE_PATH  : ClassVar[str] = f'{OPENMM_DIR}/state.xml'
+    OPENMM_SYSTEM_PATH : ClassVar[str] = f'{OPENMM_DIR}/system.xml'
+    OPENMM_TOPO_PATH   : ClassVar[str] = f'{OPENMM_DIR}/topology.pdb'
+    OPENMM_INTEG_PATH  : ClassVar[str] = f'{OPENMM_DIR}/integrator.xml'
     OPENMM_PATHS : ClassVar[list[str]] = (
         OPENMM_STATE_PATH,
         OPENMM_SYSTEM_PATH,
@@ -228,8 +236,14 @@ def has_nonempty_file(job : Job, filename : str) -> bool:
     return job.isfile(filename) and not is_empty(job.fn(filename))
 
 def load_job_rdmol(job : Job, separate_mols : bool=True) -> Chem.Mol:
-    '''Helper method for loading an RDKit molecule from the SMILES in a job's statepoint'''
+    '''Loading RDKit molecule(s) from the SMILES in a job's statepoint'''
     return PolymerBuildProject.sanitized_mol_from_smiles(job.sp.smiles_explicit, separate_mols=separate_mols)
+
+def load_job_rxn(job : Job) -> Optional[AnnotatedReaction]:
+    '''Load the reaction mechanism for a job, if one has been determined compatible with the job'''
+    if (job_mechanism := job.doc.get('mechanism')) is None:
+        return None
+    return PolymerBuildProject.REGISTERED_RXNS[job_mechanism]
 
 def load_job_topology(job : Job, sdf_pathname : str, *start_args, **kwargs) -> Optional[Molecule]:
     '''Read and return an OpenFF Topology from well-formed SDF file,
@@ -452,10 +466,14 @@ def mechanism_established(job : Job) -> bool:
     return job.doc.get('mechanism') is not None
 
 @PolymerBuildProject.label
-def ambiguous_mechanism_assignment(job : Job) -> bool:
+def ambiguous_mechanism_perception(job : Job) -> bool:
     '''Flag when monomers are not compatible with EXACTLY one reaction mechanism'''
-    compatible_mechanisms = job.doc.get('compatible_mechanisms')
-    return (compatible_mechanisms is not None) and len(compatible_mechanisms) > 1
+    return ('compatible_mechanisms' in job.doc) and len(job.doc.compatible_mechanisms) > 1
+
+@PolymerBuildProject.label
+def no_compatible_mechanism(job : Job) -> bool:
+    '''Flag when monomers are not compatible with EXACTLY one reaction mechanism'''
+    return ('compatible_mechanisms' in job.doc) and len(job.doc.compatible_mechanisms) == 0
 
 def autopolymerization_assigned(job : Job) -> bool:
     '''Whether autopolymerization perception has been carried out'''
@@ -533,7 +551,7 @@ def determine_singular_mechanism(job : Job) -> None: # NOTE: separated from perc
 def detect_autopolymerization(job : Job) -> None:
     '''Automatically detect whether the singular perceived mechanism requires monomers to interact with themselves'''
     monomers = load_job_rdmol(job, separate_mols=True)
-    rxn = PolymerBuildProject.REGISTERED_RXNS[job.doc.mechanism]
+    rxn = load_job_rxn(job)
     
     with redirect_job_to_logfile(job) as logger:
         is_autopolymerization = (
@@ -561,41 +579,80 @@ def assign_copolymer_sequence_kernel(job : Job) -> None:
 ## 2) ENUMERATE REPEAT UNIT FRAGMENTS
 fragment = PolymerBuildProject.make_group(name='fragment')
 
-@PolymerBuildProject.label
-def has_chemical_fragments(job : Job) -> bool:
+def chemical_fragments_enumerated(job : Job) -> bool:
     '''Check if repeat unit fragments from reaction enumeration have been cached'''
-    return has_nonempty_file(job, PolymerBuildProject.FRAGMENTS_PATH)
+    return job.doc.get('repeat_unit_smiles') is not None # in this case, we will actually treat an empty field as also null (unlike during chemical validation)
+
+@PolymerBuildProject.label
+def chemical_fragments_saved(job : Job) -> bool:
+    '''Check if repeat unit fragments from reaction enumeration have been cached'''
+    return has_nonempty_file(job, PolymerBuildProject.ALL_FRAGMENTS_PATH)
+
+@PolymerBuildProject.label
+def oligomer_fragments_chosen(job : Job) -> bool:
+    '''Check if repeat unit fragments from reaction enumeration have been cached'''
+    return has_nonempty_file(job, PolymerBuildProject.OLIGOMER_FRAGMENTS_PATH)
 
 @everything
 @fragment
-@PolymerBuildProject.pre.never # stopgap to ensure downstream workflow is never called until upstream is ready
 @PolymerBuildProject.pre(chemistry_allowed)
 @PolymerBuildProject.pre(mechanism_established)
-@PolymerBuildProject.post(has_chemical_fragments)
+@PolymerBuildProject.pre(autopolymerization_assigned)
+@PolymerBuildProject.post(chemical_fragments_enumerated)
+@PolymerBuildProject.post(chemical_fragments_saved)
 @PolymerBuildProject.operation(directives={'walltime' : 2/60, 'np' : 1})
-def enum_fragments(job : Job) -> None:
+def enumerate_chemical_fragments(job : Job) -> None:
     '''Enumerate all possible repeat unit fragment using cheminformatic reaction procedure'''
-    ...
-    # reactants = load_job_rdmol(job, separate_mols=True)
-    # rxn = load_job_rxn(job)
-    # reactor = PolymerizationReactor(rxn)
-    
-    # monogrp = MonomerGroup()
-    # with redirect_job_to_logfile(job) as logger:
-    #     monogrp = generate_smarts_fragments(reactants, reactor)
-    #     monogrp.to_file(job.fn(PolymerBuildProject.FRAGMENTS_PATH))
-    #     logger.info('Successfully enumerated and cached repeat unit fragments')
+    with redirect_job_to_logfile(job) as logger:
+        reactor = PolymerizationReactor(
+            rxn_schema=load_job_rxn(job),
+            fragment_strategy=CutMinimumCostBondsStrategy(),
+        )
+        
+        all_fragments = reactor.propagate_pooled(
+            monomers=load_job_rdmol(job, separate_mols=True),
+            rxn_depth_max=4,
+            allow_resampling=job.doc.is_autopolymerization, # autpolymerization require self-interaction of monomers
+            clear_map_labels=True,
+            sanitize_ops=PolymerBuildProject.SANITIZE_OPS,
+            aromaticity_model=PolymerBuildProject.AROMATICITY_MODEL,
+        )
+        
+        functionality_tracker = Counter() # for assigning serial numbering to fragments based on their functionality
+        repeat_unit_smiles : list[str] = [] # NOTE: this doesn't need to be a set, since the dict already ensures keys are unique
+        all_fragments_group = MonomerGroup()
+        for canon_smiles, fragment_mol in all_fragments.items():
+            repeat_unit_smiles.append(canon_smiles)
+            
+            functionality = get_num_linkers(fragment_mol)
+            functionality_idx = functionality_tracker[functionality]
+            monomer_label : str = f'{PolymerBuildProject.MONOMER_PREFIX}{functionality}-{functionality_idx}'
+            all_fragments_group.add_monomer(monomer_label, compliant_mol_SMARTS(Chem.MolToSmarts(fragment_mol))) 
+            functionality_tracker[functionality] += 1 # increment functionality index ticker once the fragment has been recorded
+        
+        job.doc.repeat_unit_smiles = repeat_unit_smiles # cache canonical SMILES as JSON-serializable list
+        all_fragments_group.to_file(job.fn(PolymerBuildProject.ALL_FRAGMENTS_PATH)) # save fragments to file
 
 @everything
 @fragment
-@PolymerBuildProject.pre.never # stopgap to ensure downstream workflow is never called until upstream is ready
-@PolymerBuildProject.pre(has_chemical_fragments)
-@PolymerBuildProject.post(lambda job : False) # TODO: fill this in
+@PolymerBuildProject.pre(chemical_fragments_saved)
+@PolymerBuildProject.post(oligomer_fragments_chosen)
 @PolymerBuildProject.operation(directives={'walltime' : 2/60, 'np' : 1})
-def subselect_linear_chain_fragments(job : Job) -> None:
+def subselect_oligomer_fragments(job : Job) -> None:
     '''Choose a subset of fragment that is compatible with the assigned copolymer sequence kernel,
     and which guarantees a linear chain will unambiguously be built by the mBuild hook'''
-    ...
+    with redirect_job_to_logfile(job) as logger:
+        all_fragments_group = MonomerGroup.from_file(job.fn(PolymerBuildProject.ALL_FRAGMENTS_PATH))
+        logger.info('Subselecting repeat unit fragments for linear chain build')
+        oligomer_fragments_group = MonomerGroup()
+        
+        for resname, fragment_mol in all_fragments_group.iter_rdmols(term_only=None): # iterate over terminal and non-terminal molecules
+            if (functionality := get_num_linkers(fragment_mol)) in PolymerBuildProject.ALLOWED_FUNCTIONALITIES:
+                logger.info(f'Selected {functionality}-functional fragment "{resname}" to include in oligomer build')
+                oligomer_fragments_group.add_monomer(resname, all_fragments_group.monomers[resname][0]) # :NOTE: very important to set fields with SMARTS, NOT Mol objects!
+
+        # TOSELF: consider adding conditional checks on numbers of terminal and middle monomers?
+        oligomer_fragments_group.to_file(job.fn(PolymerBuildProject.OLIGOMER_FRAGMENTS_PATH))
 
 
 ## 3) TOPOLOGY ASSEMBLY AND COORDINATE GENERATION
@@ -617,14 +674,13 @@ def no_ring_piercing(job : Job) -> bool:
     
 @everything
 @oligomerize
-# @PolymerBuildProject.pre.copy_from(determine_reactant_order)
-# @PolymerBuildProject.pre.copy_from(enum_fragments)
-@PolymerBuildProject.pre(has_chemical_fragments)
+@PolymerBuildProject.pre(oligomer_fragments_chosen)
+@PolymerBuildProject.pre(copolymer_sequence_kernel_assigned)
 @PolymerBuildProject.post(coordinates_generated)
 @PolymerBuildProject.operation(directives={'walltime' : 15/60, 'np' : 1})
 def build_oligomer_pdb(job : Job) -> None:
     '''Generate coordinates and build oligomer PDB file using mBuild'''
-    monogrp = MonomerGroup.from_file(job.fn(PolymerBuildProject.FRAGMENTS_PATH))
+    monogrp = MonomerGroup.from_file(job.fn(PolymerBuildProject.OLIGOMER_FRAGMENTS_PATH))
     with redirect_job_to_logfile(job) as logger:
         # check for identical parallel oligomer jobs
         parallel_struct_jobs = job.project.find_jobs({
@@ -637,7 +693,7 @@ def build_oligomer_pdb(job : Job) -> None:
                 break
 
         # generate coordinates with mBuild hook
-        copolymer_sequence_kernel = job.doc.copolymer_sequence_kernel # REVISIT THIS FOR EXISTENCE AND PRECONDITION
+        copolymer_sequence_kernel = job.doc.copolymer_sequence_kernel 
         polymer = build_linear_polymer(
             monomers=monogrp,
             n_monomers=(job.sp.DOP*len(copolymer_sequence_kernel)), # interpret DOP here as number of monomer sequence repeats (including end groups)
@@ -666,7 +722,7 @@ def partial_charges_assigned(job : Job) -> bool:
 @PolymerBuildProject.operation(directives={'walltime' : 20/60, 'np' : 1})
 def assign_chem_info(job : Job) -> None:
     '''Assign chemical information to bare PDB graph and export completely-specified system to SDF file'''
-    monogrp = MonomerGroup.from_file(job.fn(PolymerBuildProject.FRAGMENTS_PATH))
+    monogrp = MonomerGroup.from_file(job.fn(PolymerBuildProject.OLIGOMER_FRAGMENTS_PATH))
     with redirect_job_to_logfile(job) as logger:
         offtop = Topology.from_pdb(job.fn(PolymerBuildProject.OLIGOMER_PDB), _custom_substructures=monogrp.monomers)
         if not partition(offtop):
