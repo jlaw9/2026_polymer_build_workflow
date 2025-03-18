@@ -142,6 +142,8 @@ class PolymerBuildProject(FlowProject):
     AROMATICITY_MODEL   : ClassVar[AromaticityModel] = AromaticityModel.AROMATICITY_MDL
     REGISTERED_RXNS     : ClassVar[dict[str, AnnotatedReaction]] = {}
     
+    ENERGY_MINIMIZE_OLIGOMERS : ClassVar[bool] = True # whether to perform brief UFF energy minimization when generating oligomer conformers
+    
     ### ATOMS AND MONOMERS WHICH ARE, FOR ONE REASON OR ANOTHER, NOT ALLOWED
     BLACKLISTED_ATOM_QUERIES : ClassVar[dict[str, Chem.QueryAtom]] = {}
     BLACKLISTED_MONOMER_MOLS : ClassVar[dict[str, Chem.Mol]] = {}
@@ -697,8 +699,8 @@ def build_oligomer_pdb(job : Job) -> None:
         polymer = build_linear_polymer(
             monomers=monogrp,
             n_monomers=(job.sp.DOP*len(copolymer_sequence_kernel)), # interpret DOP here as number of monomer sequence repeats (including end groups)
-            sequence=copolymer_sequence_kernel, # DEV: for now, fixed as "BA" for all mechanisms; TODO: find way to set this as a function of mechanism in setup
-            energy_minimize=True, # TODO: add master config option for energy minimization at project level
+            sequence=copolymer_sequence_kernel,
+            energy_minimize=PolymerBuildProject.ENERGY_MINIMIZE_OLIGOMERS,
         )
         mbmol_to_openmm_pdb(job.fn(PolymerBuildProject.OLIGOMER_PDB), polymer)
         logger.info('Successfully generated PDB structure file')
@@ -723,7 +725,7 @@ def partial_charges_assigned(job : Job) -> bool:
 def assign_chem_info(job : Job) -> None:
     '''Assign chemical information to bare PDB graph and export completely-specified system to SDF file'''
     monogrp = MonomerGroup.from_file(job.fn(PolymerBuildProject.OLIGOMER_FRAGMENTS_PATH))
-    with redirect_job_to_logfile(job) as logger:
+    with redirect_job_to_logfile(job) as logger: # TODO: add handling for UnassignedChemistryinPDB errors
         offtop = Topology.from_pdb(job.fn(PolymerBuildProject.OLIGOMER_PDB), _custom_substructures=monogrp.monomers)
         if not partition(offtop):
             logger.error(f'Failed to produce residue partition with fragments for job {job.id}')
@@ -1140,6 +1142,7 @@ def main() -> None:
         help='The chemical cleanup operations to be performed any time a molecule is loaded from SMILES',
     )
     parser.add_argument(
+        '-stereo',
         '--strict-stereo',
         action='store_true',
         help='Optional, whether to enforce strict and unambiguous stereochemistry when loading molecules into OpenFF toolkit objects',
@@ -1151,6 +1154,12 @@ def main() -> None:
         default=150,
         help='A cap on the number of atoms any individual monomer molecule contains; any chemistries with monomers larger than this cap will NOT be built!'
     )
+    parser.add_argument(
+        '-no-emin',
+        '--dont-energy-minimize-oligomers',
+        action='store_true',
+        help='Whether to disable brief UFF energy minimization when generating oligomer conformers'
+    )
     # TODO : implement log level setting
 
     # separate this script's args from those required by signac
@@ -1160,6 +1169,8 @@ def main() -> None:
     # configure global vars in Project definition and initialize project instance
     PolymerBuildProject.QUANTITY_PRECISION = start_args.quantity_precision
     PolymerBuildProject.RELAXED_STEREO = not start_args.strict_stereo
+    PolymerBuildProject.ENERGY_MINIMIZE_OLIGOMERS = not start_args.dont_energy_minimize_oligomers
+    print(PolymerBuildProject.ENERGY_MINIMIZE_OLIGOMERS)
     
     PolymerBuildProject.N_ATOM_CAP_MONOMER = start_args.n_atom_cap
     PolymerBuildProject.SANITIZE_OPS = SanitizeFlags.names[start_args.sanitization_operations]   # will raise KeyError on invalid flag names
