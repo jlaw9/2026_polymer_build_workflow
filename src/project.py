@@ -1196,7 +1196,6 @@ def main() -> None:
     PolymerBuildProject.QUANTITY_PRECISION = start_args.quantity_precision
     PolymerBuildProject.RELAXED_STEREO = not start_args.strict_stereo
     PolymerBuildProject.ENERGY_MINIMIZE_OLIGOMERS = not start_args.dont_energy_minimize_oligomers
-    print(PolymerBuildProject.ENERGY_MINIMIZE_OLIGOMERS)
     
     PolymerBuildProject.N_ATOM_CAP_MONOMER = start_args.n_atom_cap
     PolymerBuildProject.SANITIZE_OPS = SanitizeFlags.names[start_args.sanitization_operations]   # will raise KeyError on invalid flag names
