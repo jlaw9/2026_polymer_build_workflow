@@ -25,6 +25,7 @@ from flow import FlowProject
 
 # Cheminformatics
 from rdkit import Chem
+from rdkit.Chem.rdmolfiles import SDWriter
 from rdkit.Chem.rdmolops import AromaticityModel, SanitizeFlags
 from rdkit.Chem.rdqueries import XAtomQueryAtom, MAtomQueryAtom, AtomNumEqualsQueryAtom
 
@@ -75,7 +76,7 @@ POLYMERIST_LOGGERS = [
 
 from polymerist.polymers.monomers import MonomerGroup
 from polymerist.polymers.monomers.specification import compliant_mol_SMARTS
-from polymerist.polymers.building import build_linear_polymer, mbmol_to_openmm_pdb
+from polymerist.polymers.building import build_linear_polymer, mbmol_to_openmm_pdb, mbmol_to_rdmol
 
 from polymerist.mdtools.openfftools import topology, boxvectors
 from polymerist.mdtools.openfftools.partition import partition
@@ -90,7 +91,7 @@ from polymerist.rdutils.rdcoords.tiling import rdmol_effective_radius
 from polymerist.rdutils.sanitization import sanitize_mol
 from polymerist.rdutils.bonding.portlib import get_num_linkers
 
-from polymerist.rdutils.reactions.reactions import AnnotatedReaction, BadNumberReactants
+from polymerist.rdutils.reactions.reactions import AnnotatedReaction
 from polymerist.rdutils.reactions.reactors import PolymerizationReactor
 from polymerist.rdutils.reactions.fragment import CutMinimumCostBondsStrategy
 
@@ -261,7 +262,7 @@ def load_job_topology(job : Job, sdf_pathname : str, *start_args, **kwargs) -> O
 
         try:
             return topology.topology_from_sdf(sdf_path, *start_args, **kwargs)
-        except UnassignedChemistryInPDBError: # special cases for known common errors
+        except InconsistentStereochemistryError: # special cases for known common errors
             logger.error('OpenFF will not load molecule with ambiguous stereochemistry')
             return None
         except MoleculeParseError: # special cases for known common errors
@@ -663,7 +664,7 @@ oligomerize = PolymerBuildProject.make_group(name='oligomerize')
 @PolymerBuildProject.label
 def coordinates_generated(job : Job) -> bool:
     '''Check whether a nonempty PDB file has been generated from fragments'''
-    return has_nonempty_file(job, PolymerBuildProject.OLIGOMER_PDB)
+    return has_nonempty_file(job, PolymerBuildProject.OLIGOMER_SDF)
 
 @PolymerBuildProject.label
 def matches_m2p_smiles(job : Job) -> bool:
@@ -680,7 +681,7 @@ def no_ring_piercing(job : Job) -> bool:
 @PolymerBuildProject.pre(copolymer_sequence_kernel_assigned)
 @PolymerBuildProject.post(coordinates_generated)
 @PolymerBuildProject.operation(directives={'walltime' : 15/60, 'np' : 1})
-def build_oligomer_pdb(job : Job) -> None:
+def build_oligomer(job : Job) -> None:
     '''Generate coordinates and build oligomer PDB file using mBuild'''
     monogrp = MonomerGroup.from_file(job.fn(PolymerBuildProject.OLIGOMER_FRAGMENTS_PATH))
     with redirect_job_to_logfile(job) as logger:
@@ -702,40 +703,60 @@ def build_oligomer_pdb(job : Job) -> None:
             sequence=copolymer_sequence_kernel,
             energy_minimize=PolymerBuildProject.ENERGY_MINIMIZE_OLIGOMERS,
         )
-        mbmol_to_openmm_pdb(job.fn(PolymerBuildProject.OLIGOMER_PDB), polymer)
-        logger.info('Successfully generated PDB structure file')
+
+        rdmol = mbmol_to_rdmol(polymer)
+        with SDWriter(job.fn(PolymerBuildProject.OLIGOMER_SDF)) as sdwriter:
+            sdwriter.write(rdmol)
+        logger.info('Successfully generated oligomer structured data file (SDF)')
 
 ### 3A) OPENFF PARAMETER ASSIGNMENT
 @PolymerBuildProject.label
-def chemical_info_assigned(job : Job) -> bool:
-    '''Check whether a topology has atomic partial charges assigned to it'''
-    return has_nonempty_file(job, PolymerBuildProject.OLIGOMER_SDF)# and is_valid_sdfile(job.fn(PolymerBuildProject.OLIGOMER_SDF)) #(load_job_oligomer_molecule(job) is not None)
+def residue_partition_found(job : Job) -> bool:
+    '''Whether a partition of the atoms of the oligomer amongst its constituent residues was successfully determined'''
+    return ('partition_found' in job.doc) and (job.doc.partition_found) 
 
 @PolymerBuildProject.label
 def partial_charges_assigned(job : Job) -> bool:
     '''Check whether a topology has atomic partial charges assigned to it'''
     return 'partial_charges' in job.data
 
-@everything
-@oligomerize
-# @PolymerBuildProject.pre.copy_from(build_oligomer_pdb)
-@PolymerBuildProject.pre(coordinates_generated)
-@PolymerBuildProject.post(chemical_info_assigned)
-@PolymerBuildProject.operation(directives={'walltime' : 20/60, 'np' : 1})
-def assign_chem_info(job : Job) -> None:
-    '''Assign chemical information to bare PDB graph and export completely-specified system to SDF file'''
-    monogrp = MonomerGroup.from_file(job.fn(PolymerBuildProject.OLIGOMER_FRAGMENTS_PATH))
-    with redirect_job_to_logfile(job) as logger: # TODO: add handling for UnassignedChemistryinPDB errors
-        offtop = Topology.from_pdb(job.fn(PolymerBuildProject.OLIGOMER_PDB), _custom_substructures=monogrp.monomers)
-        if not partition(offtop):
-            logger.error(f'Failed to produce residue partition with fragments for job {job.id}')
-            return None # exit before writing SDF; will cause post-condition to not be meet
-        topology.topology_to_sdf(job.fn(PolymerBuildProject.OLIGOMER_SDF), offtop)
-        logger.info('Successfully generated chemically-explicit SDF structure file')
+@PolymerBuildProject.label
+def openff_pdb_read_failed(job : Job) -> bool:
+    '''Check whether OpenFF was unable to correctly assign the explicitly-used oligomer substructures to read a PDB'''
+    return job.doc.get('openff_pdb_read_failed', False)
 
 @everything
 @oligomerize
-@PolymerBuildProject.pre(chemical_info_assigned)
+@PolymerBuildProject.pre(coordinates_generated)
+@PolymerBuildProject.pre.not_(openff_pdb_read_failed)
+@PolymerBuildProject.post.true('partition_found')
+@PolymerBuildProject.operation(directives={'walltime' : 20/60, 'np' : 1})
+def deduce_residue_partition(job : Job) -> None:
+    '''Assign chemical information to bare PDB graph and export completely-specified system to SDF file'''
+    monogrp = MonomerGroup.from_file(job.fn(PolymerBuildProject.OLIGOMER_FRAGMENTS_PATH))
+    offmol = load_job_oligomer_molecule(job)
+    offmol.to_file(job.fn(PolymerBuildProject.OLIGOMER_PDB), file_format='pdb') # save PDB from OpenFF molecule to guarantee formatting compatibility
+    
+    with redirect_job_to_logfile(job) as logger: # TODO: add handling for UnassignedChemistryinPDB errors
+        try:
+            offtop = Topology.from_pdb(job.fn(PolymerBuildProject.OLIGOMER_PDB), _custom_substructures=monogrp.monomers)
+        except UnassignedChemistryInPDBError:
+            logger.error(f'OpenFF PDB loader failed to cover oligomer with fragment substructures used for build')
+            job.doc['openff_pdb_read_failed'] = True
+            return None
+        
+        if not partition(offtop):
+            logger.error(f'Failed to produce residue partition with fragments')
+            job.doc['partition_found'] = False
+            return None # exit before writing SDF; will cause post-condition to not be meet
+        
+        job.doc['partition_found'] = True
+        logger.info('Successfully partitioned oligomer into residue fragments')
+        topology.topology_to_sdf(job.fn(PolymerBuildProject.OLIGOMER_SDF), offtop) # cache metadata to structure file
+
+@everything
+@oligomerize
+@PolymerBuildProject.pre(coordinates_generated)
 @PolymerBuildProject.post.true('r_eff') # this ought to be fine, as these values should never be Falsy
 @PolymerBuildProject.post.true('n_atoms_oligomer') # this ought to be fine, as these values should never be Falsy
 @PolymerBuildProject.post.true('elem_counts_oligomer') # this ought to be fine, as these values should never be Falsy
@@ -752,8 +773,8 @@ def summarize_oligomer(job : Job) -> None:
     
 @everything
 @oligomerize
-@PolymerBuildProject.pre(chemical_info_assigned)
-@PolymerBuildProject.post(partial_charges_assigned) # TODO: fill this in with something more substantive!!
+@PolymerBuildProject.pre(coordinates_generated)
+@PolymerBuildProject.post(partial_charges_assigned)
 @PolymerBuildProject.operation(directives={'walltime' : 3/60, 'np' : 1})
 def assign_partial_charges(job : Job) -> None:
     '''Generate coordinates and build oligomer PDB file using mBuild'''
@@ -791,7 +812,8 @@ def pbcs_determined(job : Job) -> bool:
 
 @everything
 @pack_lattice
-@PolymerBuildProject.pre(chemical_info_assigned) # don't need charges, only valid cornformer to pick sites
+@PolymerBuildProject.pre.true('r_eff')
+@PolymerBuildProject.pre.true('n_atoms_oligomer')
 @PolymerBuildProject.post.true('n_oligomers')
 @PolymerBuildProject.post.true('lattice_shape')
 @PolymerBuildProject.post(lattice_sites_determined)
@@ -810,9 +832,11 @@ def determine_lattice_sites(job : Job) -> None:
 
 @everything
 @pack_lattice
-@PolymerBuildProject.pre(chemical_info_assigned)
+@PolymerBuildProject.pre(coordinates_generated)
 @PolymerBuildProject.pre(partial_charges_assigned)
 @PolymerBuildProject.pre(lattice_sites_determined)
+@PolymerBuildProject.pre.true('n_oligomers')
+@PolymerBuildProject.pre.true('lattice_shape')
 @PolymerBuildProject.post(neat_melt_packed)
 @PolymerBuildProject.operation(directives={'walltime' : 15/60, 'np' : 1})
 def pack_oligomers_onto_lattice(job : Job) -> None:
@@ -822,12 +846,14 @@ def pack_oligomers_onto_lattice(job : Job) -> None:
         lattice_sites = job.data.lattice_sites[:]
 
     with redirect_job_to_logfile(job) as logger:
+        logger.info(f'Tiling {job.doc.n_oligomers} oligomers uniformly into {job.doc.lattice_shape} lattice')
         melt_offtop = topology.topology_from_molecule_onto_lattice(
             offmol,
             lattice_points=lattice_sites,
             rotate_randomly=True,
             unique_mol_ids=True
         )
+        logger.info('Saving packed melt to SDF')
         topology.topology_to_sdf(job.fn(PolymerBuildProject.MELT_NEAT_SDF), melt_offtop)
 
 @everything
@@ -890,7 +916,7 @@ def interchange_stereo_inconsistent(job : Job) -> bool:
 
 @everything
 @to_interchange
-@PolymerBuildProject.pre(chemical_info_assigned)
+@PolymerBuildProject.pre(coordinates_generated)
 @PolymerBuildProject.pre(partial_charges_assigned)
 @PolymerBuildProject.pre(neat_melt_packed)
 @PolymerBuildProject.pre(pbcs_determined)
