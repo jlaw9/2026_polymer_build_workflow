@@ -26,7 +26,7 @@ from flow import FlowProject
 # Cheminformatics
 from rdkit import Chem
 from rdkit.Chem.rdmolfiles import SDWriter
-from rdkit.Chem.rdmolops import AromaticityModel, SanitizeFlags
+from rdkit.Chem.rdmolops import AromaticityModel, SanitizeFlags, AssignStereochemistryFrom3D
 from rdkit.Chem.rdqueries import XAtomQueryAtom, MAtomQueryAtom, AtomNumEqualsQueryAtom
 
 # OpenMM
@@ -691,8 +691,8 @@ def build_oligomer(job : Job) -> None:
                 for attr in ('DOP', 'smiles_explicit')
         })
         for parallel_job in parallel_struct_jobs:
-            if (parallel_job.id != job.id) and (parallel_job.isfile(PolymerBuildProject.OLIGOMER_PDB)):
-                logger.info(f'Job {parallel_job.id} already has my oligomer PDB!')
+            if (parallel_job.id != job.id) and (parallel_job.isfile(PolymerBuildProject.OLIGOMER_SDF)):
+                logger.info(f'Job {parallel_job.id} already has my oligomer SDF!')
                 break
 
         # generate coordinates with mBuild hook
@@ -705,6 +705,7 @@ def build_oligomer(job : Job) -> None:
         )
 
         rdmol = mbmol_to_rdmol(polymer)
+        AssignStereochemistryFrom3D(rdmol) # TOSELF: unclear whether this really gains anything; certainly doesn't fix Interchange stereo errors
         with SDWriter(job.fn(PolymerBuildProject.OLIGOMER_SDF)) as sdwriter:
             sdwriter.write(rdmol)
         logger.info('Successfully generated oligomer structured data file (SDF)')
@@ -1128,7 +1129,7 @@ def main() -> None:
         '--project-path',
         type=Path,
         default=Path.cwd(),
-        required=True,
+        # required=True, # NOTE: while this SHOULD BE required, making it so prevents Signac from submitting jobs with a scheduler (fails due to missing required args)
         help='Path to the directory in which the (presumed initialized) Signac project statepoints reside',
     ),
     parser.add_argument( 
