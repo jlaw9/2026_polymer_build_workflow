@@ -163,7 +163,7 @@ def main() -> None:
     subparsers = parser.add_subparsers()
 
     # auxiliary parser for handling shared input parameters between both substrategies
-    input_parser = ArgumentParser(add_help=False) 
+    input_parser = ArgumentParser() 
     file_input_group = input_parser.add_mutually_exclusive_group(required=True)
     file_input_group.add_argument(
         '-mdat',
