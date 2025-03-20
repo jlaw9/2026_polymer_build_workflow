@@ -54,7 +54,7 @@ def main() -> None:
         '-aow',
         '--allow_overwrites',
         action='store_true',
-        help='Whether to permit '
+        help='Whether to permit creation of a new project on top of one which already exists'
     )
     
     args = parser.parse_args()
