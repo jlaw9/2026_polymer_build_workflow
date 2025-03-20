@@ -1,8 +1,9 @@
 '''Define and cache reaction templates for polymerization procedure'''
 
 import logging
-from typing import Sequence, Optional
+LOGGER = logging.getLogger(__name__)
 
+from typing import Sequence, Optional
 from pathlib import Path
 
 import json
@@ -174,7 +175,7 @@ test_reactants_catalogue : dict[str, list[Chem.Mol]] = {}
 
 num_rxn_inputs = len(rxn_inputs)
 for i, (rxnname, rxninfo) in enumerate(rxn_inputs.items(), start=1):
-    logging.info(f'Initializing reaction template {i}/{num_rxn_inputs} ("{rxnname}")')
+    LOGGER.info(f'Initializing reaction template {i}/{num_rxn_inputs} ("{rxnname}")')
     rxn_assembler = ReactionAssembler(
         reactive_groups=[fn_group_mols[reacgrp_name] for reacgrp_name in rxninfo.reactant_groups],
         byproducts=[byproduct_mols[byprod_name] for byprod_name in rxninfo.byproduct_templates],
@@ -182,7 +183,7 @@ for i, (rxnname, rxninfo) in enumerate(rxn_inputs.items(), start=1):
     )
     rxn_assemblers[rxnname] = rxn_assembler # this is solely for debug in external modules
 
-    logging.info('Initializing test reactants for validation')
+    LOGGER.info('Initializing test reactants for validation')
     test_reactants = []
     for smiles in rxninfo.test_reactant_smiles:
         exp_smiles = expanded_SMILES(smiles, assign_map_nums=False, kekulize=False)
@@ -197,33 +198,33 @@ for i, (rxnname, rxninfo) in enumerate(rxn_inputs.items(), start=1):
     
 # ASSEMBLING AND TESTING REACTIONS
 if __name__ == '__main__':
-    logging.basicConfig(level=logging.INFO, force=True)
+    logging.basicConfig(level=LOGGER.info, force=True)
     
     rxns : dict[str, AnnotatedReaction] = {}
     rxn_smarts : dict[str, str] = {}
 
     num_rxn_inputs = len(rxn_inputs)
     for i, (rxnname, rxninfo) in enumerate(rxn_inputs.items(), start=1):
-        logging.info(f'Assembling reaction {i}/{num_rxn_inputs} ("{rxnname}")')
+        LOGGER.info(f'Assembling reaction {i}/{num_rxn_inputs} ("{rxnname}")')
         rxn_inputs_path = RXNS_DIR / f'{rxnname}_inputs.json'
         rxninfo.to_file(rxn_inputs_path)
 
-        logging.info('Initializing Reaction')
+        LOGGER.info('Initializing Reaction')
         rxn_assembler = rxn_assemblers[rxnname]
         rxn = rxn_assembler.assemble_rxn(show_steps=False)
         rxn.rxnname = rxnname
-        logging.info('Reaction successfully assembled')
+        LOGGER.info('Reaction successfully assembled')
 
-        logging.info('Validating reaction template on test reactants')
+        LOGGER.info('Validating reaction template on test reactants')
         test_reactants = test_reactants_catalogue[rxnname]
         try:
             products = rxn.react(test_reactants)
-            logging.info('VALIDATION SUCCESSFUL: Reaction and test reactants are compatible')
+            LOGGER.info('VALIDATION SUCCESSFUL: Reaction and test reactants are compatible')
         except Exception as error: # TODO: make this more granular
             logging.error(format_error_for_log(error))
             continue
 
-        logging.info('Recording reaction object and representative SMARTS')
+        LOGGER.info('Recording reaction object and representative SMARTS')
         rxns[rxnname] = rxn
         rxn_smarts[rxnname] = rxn.to_smarts().replace('#0', '*')  # temporary fix to 0-atomic number bug
     
