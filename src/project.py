@@ -49,6 +49,7 @@ from openff.toolkit.utils.exceptions import (
     ToolkitUnavailableException,
 )
 logging.getLogger('openff.toolkit.typing.engines.smirnoff.parameters').setLevel(logging.CRITICAL) # silence annoying Electrostatics up-conversion INFO logs
+logging.getLogger('openff.interchange.smirnoff._nonbonded').setLevel(logging.CRITICAL) # silence voluminous "Preset charges" logs outputted on every atom in an Interchange
 warnings.filterwarnings('ignore', category=IncorrectNumConformersWarning) # silence annoying Conformers warning from Espaloma
 
 from openff.toolkit.utils.toolkits import GLOBAL_TOOLKIT_REGISTRY, OpenEyeToolkitWrapper
