@@ -201,7 +201,7 @@ PolymerBuildProject.BLACKLISTED_ATOM_QUERIES = {
     'boron'      : AtomNumEqualsQueryAtom(5, negate=False),
     'silicon'    : AtomNumEqualsQueryAtom(14, negate=False),
     # 'phosphorus' : AtomNumEqualsQueryAtom(15, negate=False),
-    'sulfur'     : AtomNumEqualsQueryAtom(16, negate=False),
+    # 'sulfur'     : AtomNumEqualsQueryAtom(16, negate=False),
     'metal'      : MAtomQueryAtom(),
     # 'halogen'    : XAtomQueryAtom(),
 }
