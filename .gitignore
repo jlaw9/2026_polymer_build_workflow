@@ -26,6 +26,7 @@ src/parameters
 
 # plot outputs
 molecule_sizes/*
+bond_length_distribution*.png
 
 # benchmarks and profiling
 profile.csv
