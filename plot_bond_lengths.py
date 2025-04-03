@@ -25,22 +25,8 @@ with h5py.File(bond_length_data, 'r') as hdf5_file:
         all_bond_dists.append(indiv_bond_dists[:])
 all_bond_dists : np.ndarray[float] = np.concatenate(all_bond_dists)
 
-# taken from https://sites.google.com/site/chempendix/bond-lengths
-ANGSTROM : str = "\u212B"
-EXPER_BOND_LENGTHS : dict[str, float] = { 
-    'O-H' : 0.97,
-    'C-H' : 1.09,
-    'C=O' : 1.23,
-    'C=C' : 1.34,
-    # 'C:C' : 1.39,
-    'C-N=' : 1.4,
-    'C-O' : 1.43,
-    'C-C' : 1.54,
-}
-cmap = plt.get_cmap('turbo')
-bond_colors = iter(cmap(np.linspace(0, 1, num=len(EXPER_BOND_LENGTHS))))
-
 # partition distrubtion into bins
+ANGSTROM : str = "\u212B"
 bond_bin_idxs = np.digitize(all_bond_dists, bins=bond_length_bins)
 bond_bin_labels = np.unique(bond_bin_idxs)
 
@@ -72,14 +58,32 @@ for i, bin_label in enumerate(bond_bin_labels):
     ax.set_xticks(xticks)
     ax.set_xticklabels([f'{tick:1.2f}' for tick in xticks], rotation=-30)
 
-    if i == 1: # hard-coding select range for now
-        for pairtype, diatomic_bond_length in EXPER_BOND_LENGTHS.items():
-            ax.axvline(diatomic_bond_length, color=next(bond_colors), linestyle='--', label=pairtype)
-        ax.legend(fontsize=fontsize)
-
     ax.set_title(f'Bond length distribution ({bin_desc})', fontsize=fontsize)
     ax.set_xlabel(f'Bond length ({ANGSTROM})', fontsize=0.8*fontsize)
     ax.set_ylabel('Number of bonds', fontsize=fontsize)
-plt.show()
+
+# plot experimental bond lengths
+## taken from https://sites.google.com/site/chempendix/bond-lengths
+EXPER_BOND_LENGTHS : dict[str, float] = { 
+    'O-H' : 0.97,
+    'C-H' : 1.09,
+    'C=O' : 1.23,
+    'C=C' : 1.34,
+    # 'C:C' : 1.39,
+    'C-N=' : 1.4,
+    'C-O' : 1.43,
+    'C-C' : 1.54,
+    'C=S' : 1.73,
+    'C-S' : 1.83,
+}
+cmap = plt.get_cmap('turbo')
+diatomic_bond_colors = iter(cmap(np.linspace(0, 1, num=len(EXPER_BOND_LENGTHS))))
+
+for pairtype, diatomic_bond_length in EXPER_BOND_LENGTHS.items():
+    ax = axes[np.digitize(diatomic_bond_length, bins=bond_length_bins)]
+    ax.axvline(diatomic_bond_length, color=next(diatomic_bond_colors), linestyle='--', label=pairtype)
+    _ = ax.legend(fontsize=fontsize)
+
+# plt.show()
 
 fig.savefig('bond_length_distribution.png', bbox_inches='tight')
