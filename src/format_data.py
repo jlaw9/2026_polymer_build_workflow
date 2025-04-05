@@ -163,7 +163,7 @@ def main() -> None:
     subparsers = parser.add_subparsers()
 
     # auxiliary parser for handling shared input parameters between both substrategies
-    input_parser = ArgumentParser() 
+    input_parser = ArgumentParser(add_help=False) # NOTE: this is absolutely necessary, as removing it causes "confliction option strings" errors on any script calls
     file_input_group = input_parser.add_mutually_exclusive_group(required=True)
     file_input_group.add_argument(
         '-mdat',
