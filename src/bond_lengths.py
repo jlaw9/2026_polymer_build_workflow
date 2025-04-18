@@ -48,7 +48,7 @@ def extract_bond_lengths(
             continue 
         else:
             bond_idx_pairs = tuple((bond.GetBeginAtomIdx(), bond.GetEndAtomIdx()) for bond in oligomer.GetBonds())
-            bond_idx_pairs = tuple(zip(*bond_idx_pairs)) # "transpose" from pairwise indices to 2 tuples or row and column indices to adhere with numpy's indexing convention
+            bond_idx_pairs = tuple(zip(*bond_idx_pairs)) # "transpose" from pairwise indices to 2 tuples of row and column indices to adhere with numpy's indexing convention
             dist_matr = Get3DDistanceMatrix(oligomer)
             bond_dists = dist_matr[bond_idx_pairs]
 

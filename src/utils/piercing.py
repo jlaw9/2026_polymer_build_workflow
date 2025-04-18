@@ -94,7 +94,7 @@ def ring_piercing_idxs(
             for piercing_idx_pair in spanning_pair_idxs[pierces_ring & t_is_supported] # take piercing pair to be those which intersect the ring polygon AND have interpolation parameter 0 <= t <= 1
     ) 
     
-def assess_ring_piercing(mol : Chem.Mol, conformer_idx : int=0) -> dict[tuple[int], list[tuple[int, int]]]:
+def assess_ring_piercing(mol : Chem.Mol, conformer_idx : int=0) -> dict[tuple[int], tuple[tuple[int, int]]]:
     '''
     Accepts an RDKit Mol (assumed to have at least one conformer) and detects ring -piercing bonds
     
