@@ -18,6 +18,7 @@ imports_for_profiling.py
 import_times.*
 openmm_testing.ipynb
 pilot_to_prod_hashes.csv
+pierced_systems.csv
 
 # source data for polymer build jobs
 src/monomer_data
@@ -26,7 +27,7 @@ src/parameters
 
 # plot outputs
 molecule_sizes/*
-bond_length_distribution*.png
+bond_length*.png
 
 # benchmarks and profiling
 profile.csv
