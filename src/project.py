@@ -88,9 +88,10 @@ from polymerist.mdtools.openmmtools.serialization import apply_state_to_context
 from polymerist.mdtools.openmmtools.evaluation import eval_openmm_energies_separated
 from polymerist.mdtools.lammpstools.lammpseval import get_lammps_energies
 
-from polymerist.rdutils.rdcoords.tiling import rdmol_effective_radius
 from polymerist.rdutils.sanitization import sanitize_mol
 from polymerist.rdutils.bonding.portlib import get_num_linkers
+from polymerist.rdutils.rdcoords.tiling import rdmol_effective_radius
+from polymerist.rdutils.rdcoords.piercing import summarize_ring_piercing
 
 from polymerist.rdutils.reactions.reactions import AnnotatedReaction
 from polymerist.rdutils.reactions.reactors import PolymerizationReactor
@@ -668,13 +669,10 @@ def coordinates_generated(job : Job) -> bool:
     return has_nonempty_file(job, PolymerBuildProject.OLIGOMER_SDF)
 
 @PolymerBuildProject.label
-def matches_m2p_smiles(job : Job) -> bool:
-    '''Check whether the resulting polymer agrees with the SMILES output of M2P (if data is provided)'''
-    ... # this check is not always applicatble, and the way DOP is currently defined is a little bit dicey
-
-@PolymerBuildProject.label
-def no_ring_piercing(job : Job) -> bool:
-    ... # TODO: implement post-minimization bond length check
+def detected_pierced_rings(job : Job) -> bool:
+    '''Check whether and pierced rings were found in the generated conformer'''
+    ring_piercing_idxs = job.doc.get('ring_piercing_idxs', None)
+    return (ring_piercing_idxs is not None) and any(ring_piercing_idxs.values())
     
 @everything
 @oligomerize
@@ -710,6 +708,36 @@ def build_oligomer(job : Job) -> None:
         with SDWriter(job.fn(PolymerBuildProject.OLIGOMER_SDF)) as sdwriter:
             sdwriter.write(rdmol)
         logger.info('Successfully generated oligomer structured data file (SDF)')
+        
+@everything
+@oligomerize
+@PolymerBuildProject.pre(coordinates_generated)
+@PolymerBuildProject.pre(lambda job : 'ring_piercing_idxs' not in job.doc) # needed for idempotency in case molecule file read fails
+@PolymerBuildProject.post.true('ring_piercing_idxs')
+@PolymerBuildProject.operation(directives={'walltime' : 1/60, 'np' : 1})
+def detect_ring_piercing(job : Job) -> None:
+    '''Determine if coordinate generation resulted in any bonds which pierce through ring in the molecule (can't be minimized out!)'''
+    try:
+        with Chem.SDMolSupplier(job.fn(PolymerBuildProject.OLIGOMER_SDF), sanitize=False, removeHs=False) as suppl:
+            oligomer = suppl[0]
+            sanitize_mol(oligomer,
+                sanitize_ops=PolymerBuildProject.SANITIZE_OPS,
+                aromaticity_model=PolymerBuildProject.AROMATICITY_MODEL,
+                in_place=True,
+            )
+    except OSError:
+        job.doc['ring_piercing_idxs'] = None # sentinel to show this step has been attempted but not completed successfully
+    else:
+        with redirect_job_to_logfile(job) as logger:
+            logger.info('Detecting ring piercing in conformer')
+            ring_piercing_idxs = summarize_ring_piercing(oligomer)
+            n_pierced_rings = sum(1 for idxs in ring_piercing_idxs.values() if idxs) # tally up all rings with at least one piercing bond
+            logger.info(f'{n_pierced_rings} pierced rings detected')
+            
+            job.doc['ring_piercing_idxs'] = {
+                str(ring_idxs) : piercing_atom_idxs # have to stringify, since JSON is too stupid to allow (immutable!) tuples as keys
+                    for ring_idxs, piercing_atom_idxs in ring_piercing_idxs.items()
+            }
 
 ### 3A) OPENFF PARAMETER ASSIGNMENT
 @PolymerBuildProject.label
