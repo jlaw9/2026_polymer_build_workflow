@@ -3,7 +3,6 @@
 import logging
 from typing import Iterable, Optional, Sequence, Union
 
-from string import ascii_uppercase
 from pathlib import Path
 from ast import literal_eval
 
@@ -11,10 +10,6 @@ from rdkit import Chem
 
 from polymerist.smileslib.cleanup import is_valid_SMILES, expanded_SMILES
 from polymerist.genutils.decorators.functional import allow_string_paths
-
-from polymerist.polymers.monomers import MonomerGroup
-from polymerist.polymers.monomers.specification import compliant_mol_SMARTS
-from polymerist.rdutils.reactions.reactors import PolymerizationReactor
 
 
 @allow_string_paths
@@ -64,20 +59,3 @@ def parse_monomer_smiles(smiles : Union[str, Sequence[str]], canonicalize : bool
         smiles = Chem.CanonSmiles(smiles)
     
     return smiles
-
-def generate_smarts_fragments(reactants : Iterable[Chem.Mol], reactor : PolymerizationReactor) -> MonomerGroup:
-    '''Takes a labelled dict of reactant Mols and a PolymerizationReactor object with predefined rxn mechanism
-    Returns a MonomerGroup containing all fragments enumerated by the provided rxn'''
-    monogrp = MonomerGroup()
-    for adducts, frags in reactor.propagate(reactants):
-        for assoc_group_name, rdfragment in zip(ascii_uppercase, frags):
-            # generate spec-compliant SMARTS
-            raw_smiles = Chem.MolToSmiles(rdfragment)
-            exp_smiles = expanded_SMILES(raw_smiles)
-            spec_smarts = compliant_mol_SMARTS(exp_smiles)
-
-            # record to monomer group
-            affix = 'TERM' if MonomerGroup.is_terminal(rdfragment) else 'MID'
-            monogrp.monomers[f'{assoc_group_name}_{affix}'] = [spec_smarts]
-
-    return monogrp
