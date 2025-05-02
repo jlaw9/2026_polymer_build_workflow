@@ -11,7 +11,7 @@ from rdkit.Chem.rdmolfiles import SDMolSupplier
 from rdkit.Chem.rdmolops import Get3DDistanceMatrix
 
 from src.project import PolymerBuildProject
-from src.utils.piercing import assess_ring_piercing
+from polymerist.rdutils.rdcoords.piercing import summarize_ring_piercing
 
 
 # plotting params
@@ -45,7 +45,7 @@ for job in track(project, description='Detecting ring piercing'):
     dist_matr = Get3DDistanceMatrix(oligomer)
     bond_dists = dist_matr[bond_idx_pairs]
 
-    ring_piercing_idxs : dict[tuple[int], tuple[tuple[int, int]]] = assess_ring_piercing(oligomer)
+    ring_piercing_idxs : dict[tuple[int], tuple[tuple[int, int]]] = summarize_ring_piercing(oligomer)
     n_rings_pierced = sum(bool(idxs) for idxs in ring_piercing_idxs.values())
     found_pierced_rings = any(ring_piercing_idxs.values())
 
