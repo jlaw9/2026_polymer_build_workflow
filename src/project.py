@@ -68,6 +68,7 @@ from openff.interchange import Interchange
 
 # Custom (polymerist)
 import polymerist as ps
+from polymerist.genutils.fileutils.filetree import is_empty
 from polymerist.genutils.logutils.IOHandlers import submodule_loggers, get_active_loggers
 POLYMERIST_LOGGERS = [
     logger
@@ -102,7 +103,6 @@ from polymerist.smileslib.cleanup import expanded_SMILES
 # Utils imports - made these non-relative to avoid screwing up external vs internal call
 try: # call as python module
     from .utils.logs import redirect_to_logfile
-    from .utils.filelib import is_empty
     from .utils.dataIO import read_rxn_mapping_data
     from .utils.offlib import elem_counts
     from .utils.packing import generate_uniform_subpopulated_lattice
@@ -113,7 +113,6 @@ try: # call as python module
     from .environments.cuboulder import CUAlpineEnvironment, CUBlancaShirtsEnvironment # inject CURC-specific environment config
 except ImportError: # call as script file
     from utils.logs import redirect_to_logfile
-    from utils.filelib import is_empty
     from utils.dataIO import read_rxn_mapping_data
     from utils.offlib import elem_counts
     from utils.packing import generate_uniform_subpopulated_lattice
@@ -1054,7 +1053,7 @@ def evaluate_energies_LAMMPS(job : Job) -> None:
         with job: # need this context to make relative path work
             energies_lmp_raw = get_lammps_energies(
                 job.fn(PolymerBuildProject.LAMMPS_INPUT_PATH),
-                preferred_unit=PolymerBuildProject.ENERGY_UNIT,
+                preferred_energy_unit=PolymerBuildProject.ENERGY_UNIT,
                 cmdargs=LMP_ARGS,
             )
         logger.info('Completed energy evaluation from LAMMPS input files')
