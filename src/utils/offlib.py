@@ -21,7 +21,7 @@ def elem_counts_hill(offmol : Molecule) -> dict[str, int]:
     return elem_counts
 
 def elem_counts(offobj : Union[Molecule, Topology], from_hill_formula : bool=False) -> dict[str, int]:
-    '''Takes an penFF Molecule or Topology object and returns a dict keyed by
+    '''Takes an OpenFF Molecule or Topology object and returns a dict keyed by
     unique element symbols whose values count the number of occurrences of that element'''
 
     if from_hill_formula:
