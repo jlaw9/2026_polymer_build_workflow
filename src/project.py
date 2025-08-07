@@ -68,7 +68,7 @@ from openff.interchange import Interchange
 
 # Custom (polymerist)
 import polymerist as ps
-from polymerist.genutils.fileutils.filetree import is_empty
+from polymerist.genutils.fileutils.pathutils import is_empty
 from polymerist.genutils.logutils.IOHandlers import submodule_loggers, get_active_loggers
 POLYMERIST_LOGGERS = [
     logger
