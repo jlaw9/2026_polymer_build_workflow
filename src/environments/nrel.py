@@ -1,5 +1,8 @@
 '''Custom ComputeEnvironment definitions for the National Renewable Energy Laboratory (NREL) supercomputing'''
 
+__author__ = 'Timotej Bernat'
+__email__ = 'timtej.bernat@colorado.edu'
+
 from flow.environment import DefaultSlurmEnvironment, get_environment, _PartitionConfig
 
 
