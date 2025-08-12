@@ -198,7 +198,7 @@ for i, (rxnname, rxninfo) in enumerate(rxn_inputs.items(), start=1):
     
 # ASSEMBLING AND TESTING REACTIONS
 if __name__ == '__main__':
-    logging.basicConfig(level=LOGGER.info, force=True)
+    logging.basicConfig(level=logging.INFO, force=True)
     
     rxns : dict[str, AnnotatedReaction] = {}
     rxn_smarts : dict[str, str] = {}
