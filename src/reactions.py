@@ -100,7 +100,7 @@ rxn_inputs : dict[str, ReactionInfo] = {
             2 : (1, 5),
             4 : (5, 1),
         },
-        test_reactant_smiles=('OCCO', 'O(C=O)c1ccc(cc1)C(=O)O'), # PET,
+        test_reactant_smiles=('OCCO', 'OC(=O)c1ccc(cc1)C(=O)O'), # PET,
     ),
     'polyamide' : ReactionInfo(
         reactant_groups=['amine', 'carboxyl'],
@@ -120,7 +120,7 @@ rxn_inputs : dict[str, ReactionInfo] = {
             3 : (1, 8), # doubles up carbonyl transfer - must have target atoms as beginning to maintain canonical derangement form
             9 : (8, 1),
         },
-        test_reactant_smiles=('O(c1ccc(N)cc1)c2ccc(cc2)N', 'C1=C2C(=CC3=C1C(=O)OC3=O)C(=O)OC2=O'), # DuPont Kapton (poly (4,4'-oxydiphenylene-pyromellitimide))
+        test_reactant_smiles=('c1cc(N)ccc1Oc1ccc(N)cc1', 'c1c2C(=O)OC(=O)c2cc3C(=O)OC(=O)c31'), # DuPont Kapton (poly (4,4'-oxydiphenylene-pyromellitimide))
     ),
     'polycarbonate_phosgene'     : ReactionInfo(
         reactant_groups=['hydroxyl', 'acyl_chloride'],
