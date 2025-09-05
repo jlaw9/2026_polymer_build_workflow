@@ -9,7 +9,7 @@ from openff.interchange import Interchange
 from openff.interchange.interop.openmm._positions import to_openmm_positions
 
 from polymerist.mdtools.openmmtools import serialization
-from polymerist.mdtools.openmmtools.forcegroups import impose_unique_force_groups
+from polymerist.mdtools.openmmtools.forces import impose_unique_force_groups
 
 
 def interchange_to_openmm(
