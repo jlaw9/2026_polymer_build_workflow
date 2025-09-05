@@ -77,7 +77,6 @@ POLYMERIST_LOGGERS = [
 ] # TODO: move this into polymerist?
 
 from polymerist.polymers.monomers import MonomerGroup
-from polymerist.polymers.monomers.specification import compliant_mol_SMARTS
 from polymerist.polymers.building import build_linear_polymer, mbmol_to_openmm_pdb, mbmol_to_rdmol
 
 from polymerist.mdtools.openfftools import topology, boxvectors
@@ -630,8 +629,10 @@ def enumerate_chemical_fragments(job : Job) -> None:
             
             functionality = get_num_linkers(fragment_mol)
             functionality_idx = functionality_tracker[functionality]
-            monomer_label : str = f'{PolymerBuildProject.MONOMER_PREFIX}{functionality}-{functionality_idx}'
-            all_fragments_group.add_monomer(monomer_label, compliant_mol_SMARTS(Chem.MolToSmarts(fragment_mol))) 
+            all_fragments_group.add_monomer(
+                f'{PolymerBuildProject.MONOMER_PREFIX}{functionality}-{functionality_idx}',
+                canon_smiles,
+            )
             functionality_tracker[functionality] += 1 # increment functionality index ticker once the fragment has been recorded
         
         job.doc.repeat_unit_smiles = repeat_unit_smiles # cache canonical SMILES as JSON-serializable list
