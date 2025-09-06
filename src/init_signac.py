@@ -16,20 +16,14 @@ try: # call as python module
     from . import _parent_dir
     from .parameters import ParametersSwept, PARAMS_SWEPT_PATH 
     from .parameters import ParametersConfig, PARAMS_CONFIG_PATH
-
-    from .utils.filelib import validate_file_path
-    from .utils.dataIO import read_monomer_data
-    from .utils.datafmt import parse_field_names_and_roles
-    from .utils.containers import cartesian_grid
+    from .utils.dataIO import validate_file_path, read_monomer_data
 except ImportError: # call as script file    
     from __init__ import _parent_dir
     from parameters import ParametersSwept, PARAMS_SWEPT_PATH 
     from parameters import ParametersConfig, PARAMS_CONFIG_PATH
-
-    from utils.filelib import validate_file_path
-    from utils.dataIO import read_monomer_data
-    from utils.datafmt import parse_field_names_and_roles
-    from utils.containers import cartesian_grid
+    from utils.dataIO import validate_file_path, read_monomer_data
+    
+from polymerist.genutils.iteration import cartesian_grid
 
 
 # Helper functions
@@ -53,35 +47,39 @@ def read_monomer_dataframe(
 
 def generate_statepoints(args : Namespace) -> None:
     '''Initialize project directory and job statepoint files for chosen monomer data fields'''
-    # load monomer data and 
+    # read monomer data into memory
     monomer_df = read_monomer_dataframe(
         args.monomer_data,
         number_to_sample=args.number_to_sample,
         random=args.random
     )
 
+    # determine statepoint values and field names
     validate_file_path(args.parameters_config, check_missing=True, check_has_extension=True, valid_extensions=('.json',))
     params_config = ParametersConfig.from_file(args.parameters_config).__dict__
 
     validate_file_path(args.parameters_swept, check_missing=True, check_has_extension=True, valid_extensions=('.json',))
     params_swept = ParametersSwept.from_file(args.parameters_swept).__dict__
+    
+    ## identify names of statepoint and metadata fields from provided monomer dataset
+    fields_not_in_df : set[str] = set(args.parameters_field).difference(monomer_df.columns)
+    if any(fields_not_in_df):
+        raise KeyError(f'The following requested statepoint fields not found in the provided monomer data file:\n{fields_not_in_df}')
+    else: # if no extraneous fields are found, partition fields into statepoint and metadata (i.e. "other") 
+        statepoint_fields = args.parameters_field
+        metadata_fields = monomer_df.columns.difference(args.parameters_field)
 
-    # create signac project directory and populate data into statepoints
+    # create signac project directory and 
     project_path = (args.output_dir / args.project_name).resolve()
     validate_file_path(project_path, check_already_exists=True)
     project = init_project(args.project_name)
 
-    field_name, field_role = parse_field_names_and_roles(monomer_df)
+    ## populate data into statepoints
     for _, row in monomer_df.iterrows():
-        # divvy up values according to field role
-        rowdata = defaultdict(dict)
-        for field, value in row.items():
-            rowdata[field_role[field]][field_name[field]] = value
-
         # generate job statepoints and metadata, inject shared state parameters as needed
         for param_combo in cartesian_grid(params_swept):
-            statepoint = {**rowdata['statedata'], **param_combo, **params_config} # mix together statepoint parameters from all sources
-            metadata   = {**rowdata['metadata']} # shunt accessory data from training set to document
+            statepoint = {**row.loc[statepoint_fields].to_dict(), **param_combo, **params_config} # mix together statepoint parameters from all sources
+            metadata   = {**row.loc[metadata_fields  ].to_dict()} # shunt accessory data from training set to document
 
             job = project.open_job(statepoint=statepoint)
             job.document = metadata
@@ -109,15 +107,23 @@ def main() -> None:
         help='When --number-to-sample is set, dictates whether the subsample should be the first N (default) or a random sample of N',
     )
     parser.add_argument(
+        '-pfield',
+        '--parameters-field',
+        type=str,
+        nargs='+',
+        default=['smiles_explicit'],
+        help='List of field names from the provided monomer dataset to include as statepoint keys',
+    )
+    parser.add_argument(
         '-pconfig',
-        '--parameters_config',
+        '--parameters-config',
         type=Path,
         default=PARAMS_CONFIG_PATH,
         help='Path to a JSON file containing shared configuration parameters for project jobs',
     )
     parser.add_argument(
         '-pswept',
-        '--parameters_swept',
+        '--parameters-swept',
         type=Path,
         default=PARAMS_SWEPT_PATH,
         help='Path to a JSON file containing varying design parameters for project jobs',

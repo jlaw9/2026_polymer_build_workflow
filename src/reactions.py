@@ -1,10 +1,9 @@
 '''Define and cache reaction templates for polymerization procedure'''
 
 import logging
-logging.basicConfig(level=logging.INFO)
+LOGGER = logging.getLogger(__name__)
 
 from typing import Sequence, Optional
-
 from pathlib import Path
 
 import json
@@ -13,11 +12,10 @@ from dataclasses import dataclass, field
 from rdkit import Chem
 
 from polymerist.genutils.fileutils.jsonio.jsonify import make_jsonifiable
-from polymerist.polymers.monomers.specification import expanded_SMILES
+from polymerist.smileslib.cleanup import expanded_SMILES
 
 from polymerist.rdutils.bonding import portlib
 from polymerist.rdutils.reactions.reactions import AnnotatedReaction
-from polymerist.rdutils.reactions.reactors import PolymerizationReactor
 from polymerist.rdutils.reactions.assembly import ReactionAssembler
 
 try: # call as python module
@@ -26,6 +24,9 @@ try: # call as python module
 except ImportError: # call as script file
     from __init__ import _parent_dir
     from utils.logs import format_error_for_log
+    
+RXNS_DIR = _parent_dir / 'reactions'
+RXNS_DIR.mkdir(exist_ok=True)
 
 
 # INITIALIZING SMARTS FOR FUNCTIONAL GROUPS
@@ -99,7 +100,7 @@ rxn_inputs : dict[str, ReactionInfo] = {
             2 : (1, 5),
             4 : (5, 1),
         },
-        test_reactant_smiles=('OCCO', 'O(C=O)c1ccc(cc1)C(=O)O'), # PET,
+        test_reactant_smiles=('OCCO', 'OC(=O)c1ccc(cc1)C(=O)O'), # PET,
     ),
     'polyamide' : ReactionInfo(
         reactant_groups=['amine', 'carboxyl'],
@@ -119,7 +120,7 @@ rxn_inputs : dict[str, ReactionInfo] = {
             3 : (1, 8), # doubles up carbonyl transfer - must have target atoms as beginning to maintain canonical derangement form
             9 : (8, 1),
         },
-        test_reactant_smiles=('O(c1ccc(N)cc1)c2ccc(cc2)N', 'C1=C2C(=CC3=C1C(=O)OC3=O)C(=O)OC2=O'), # DuPont Kapton (poly (4,4'-oxydiphenylene-pyromellitimide))
+        test_reactant_smiles=('c1cc(N)ccc1Oc1ccc(N)cc1', 'c1c2C(=O)OC(=O)c2cc3C(=O)OC(=O)c31'), # DuPont Kapton (poly (4,4'-oxydiphenylene-pyromellitimide))
     ),
     'polycarbonate_phosgene'     : ReactionInfo(
         reactant_groups=['hydroxyl', 'acyl_chloride'],
@@ -174,7 +175,7 @@ test_reactants_catalogue : dict[str, list[Chem.Mol]] = {}
 
 num_rxn_inputs = len(rxn_inputs)
 for i, (rxnname, rxninfo) in enumerate(rxn_inputs.items(), start=1):
-    logging.info(f'Initializing reaction template {i}/{num_rxn_inputs} ("{rxnname}")')
+    LOGGER.info(f'Initializing reaction template {i}/{num_rxn_inputs} ("{rxnname}")')
     rxn_assembler = ReactionAssembler(
         reactive_groups=[fn_group_mols[reacgrp_name] for reacgrp_name in rxninfo.reactant_groups],
         byproducts=[byproduct_mols[byprod_name] for byprod_name in rxninfo.byproduct_templates],
@@ -182,7 +183,7 @@ for i, (rxnname, rxninfo) in enumerate(rxn_inputs.items(), start=1):
     )
     rxn_assemblers[rxnname] = rxn_assembler # this is solely for debug in external modules
 
-    logging.info('Initializing test reactants for validation')
+    LOGGER.info('Initializing test reactants for validation')
     test_reactants = []
     for smiles in rxninfo.test_reactant_smiles:
         exp_smiles = expanded_SMILES(smiles, assign_map_nums=False, kekulize=False)
@@ -195,38 +196,35 @@ for i, (rxnname, rxninfo) in enumerate(rxn_inputs.items(), start=1):
         test_reactants.append(reactant_mol)
     test_reactants_catalogue[rxnname] = [Chem.Mol(reactant) for reactant in test_reactants]
     
-
+# ASSEMBLING AND TESTING REACTIONS
 if __name__ == '__main__':
-    RXNS_DIR = _parent_dir / 'reactions'
-    RXNS_DIR.mkdir(exist_ok=True)
-
-    # ASSEMBLING AND TESTING REACTIONS
+    logging.basicConfig(level=logging.INFO, force=True)
+    
     rxns : dict[str, AnnotatedReaction] = {}
     rxn_smarts : dict[str, str] = {}
 
     num_rxn_inputs = len(rxn_inputs)
     for i, (rxnname, rxninfo) in enumerate(rxn_inputs.items(), start=1):
-        logging.info(f'Assembling reaction {i}/{num_rxn_inputs} ("{rxnname}")')
+        LOGGER.info(f'Assembling reaction {i}/{num_rxn_inputs} ("{rxnname}")')
         rxn_inputs_path = RXNS_DIR / f'{rxnname}_inputs.json'
         rxninfo.to_file(rxn_inputs_path)
 
-        logging.info('Initializing Reaction')
+        LOGGER.info('Initializing Reaction')
         rxn_assembler = rxn_assemblers[rxnname]
         rxn = rxn_assembler.assemble_rxn(show_steps=False)
         rxn.rxnname = rxnname
-        logging.info('Reaction successfully assembled')
+        LOGGER.info('Reaction successfully assembled')
 
-        logging.info('Validating reaction template on test reactants')
+        LOGGER.info('Validating reaction template on test reactants')
         test_reactants = test_reactants_catalogue[rxnname]
         try:
-            reactor = PolymerizationReactor(rxn)
-            products = reactor.react(test_reactants)
-            logging.info('VALIDATION SUCCESSFUL: Reaction and test reactants are compatible')
+            products = rxn.react(test_reactants)
+            LOGGER.info('VALIDATION SUCCESSFUL: Reaction and test reactants are compatible')
         except Exception as error: # TODO: make this more granular
             logging.error(format_error_for_log(error))
             continue
 
-        logging.info('Recording reaction object and representative SMARTS')
+        LOGGER.info('Recording reaction object and representative SMARTS')
         rxns[rxnname] = rxn
         rxn_smarts[rxnname] = rxn.to_smarts().replace('#0', '*')  # temporary fix to 0-atomic number bug
     

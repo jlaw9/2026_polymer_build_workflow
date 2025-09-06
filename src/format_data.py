@@ -12,21 +12,22 @@ from argparse import ArgumentParser, Namespace
 # File I/O
 import pandas as pd
 from pathlib import Path
+from typing import Iterable
 
 # Custom utils imports 
 try: # call as python module
-    from .utils.filelib import validate_file_path
-    from .utils.dataIO import WRITER_FNS_BY_EXT
-    from .utils.dataIO import read_rxn_mapping_data, read_monomer_data
-    from .utils.datafmt import standardize_monomer_data_columns, label_monomer_statepoint_data
+    from .utils.dataIO import validate_file_path, WRITER_FNS_BY_EXT, read_monomer_data
+    from .utils.cheminf import parse_monomer_smiles
 except ImportError: # call as script file
-    from utils.filelib import validate_file_path
-    from utils.dataIO import WRITER_FNS_BY_EXT
-    from utils.dataIO import read_rxn_mapping_data, read_monomer_data
-    from utils.datafmt import standardize_monomer_data_columns, label_monomer_statepoint_data
+    from utils.dataIO import validate_file_path, WRITER_FNS_BY_EXT, read_monomer_data
+    from utils.cheminf import parse_monomer_smiles
+    
+from polymerist.genutils.textual.prettyprint import stringify_dict
+from polymerist.smileslib.cleanup import expanded_SMILES
     
 
-# READING INPUT DATA
+# HELPER FUNCTIONS
+## READING INPUT DATA
 def sanitize_monomer_data_paths(args : Namespace) -> list[Path]:
     '''Handles both the direct "monomer-paths" or "glob" modes of passing monomer input files'''
     if not args.output_dir.is_dir():
@@ -36,6 +37,39 @@ def sanitize_monomer_data_paths(args : Namespace) -> list[Path]:
         return args.monomer_paths
     elif args.monomer_paths is None:
         return [path for path in Path.cwd().glob(args.glob)]
+    
+## STANDARDIZING MONOMER DATASET FIELDS
+def locate_attr_cols(dataframe : pd.DataFrame, columns_to_check : dict[str, Iterable[str]]) -> dict[str, str]:
+    '''Takes a dataframe of monomer training data and a dict of desired attributes and the columns in the dataframe it might be found in
+    Checks that those columns are present and returns dict with first column for each if all are present, or NoneType otherwise'''
+    attr_columns : dict[str, str] = {}
+    for targ_attr, col_names_to_check in columns_to_check.items():
+        for col_name in col_names_to_check:
+            if col_name in dataframe:
+                attr_columns[targ_attr] = col_name
+                break
+        else:
+            raise IndexError(f'No matching columns for attribute "{targ_attr} were found from queries: "{col_names_to_check}"')
+    logging.info('Found valid columns name mappings:\n\t' + stringify_dict(attr_columns))
+        
+    return attr_columns
+
+def standardize_monomer_data_columns(dataframe : pd.DataFrame) -> None:
+    '''Standardize column naming and format of required monomer data DataFrame (in-place)'''
+    STATEPOINT_ATTR_COLUMNS : dict[str, tuple[str]] = { # the attributes to save and the column(s) to check for these values
+        'smiles_original' : ('smiles_original', 'smiles_monomer', 'monomer', 'monomers', 'Monomer', 'Monomers'), # NOTE: !!ESSENTIAL!! for idempotency that column name come first for now
+        'mechanism_labelled' : ('mechanism_labelled', 'mechanism', 'rxnname', 'Chemistry'), # NOTE: !!ESSENTIAL!! for idempotency that column name come first for now
+    }
+    attr_locs = locate_attr_cols(dataframe, STATEPOINT_ATTR_COLUMNS) # this will raise Exception if any of the fields cannot be found
+    dataframe.rename(
+        columns={col_found_in : std_name for std_name, col_found_in in attr_locs.items()},
+        inplace=True # perform rename in-place to avoid allocating memory for new (potentially large) dataframe
+    )
+    logging.info('Canonicalizing all SMILES')
+    dataframe['smiles_canonical'] = dataframe['smiles_original'].map(lambda smi : parse_monomer_smiles(smi, canonicalize=True))
+
+    logging.info('Expanding SMILES to be chemically explicit')
+    dataframe['smiles_explicit' ] = dataframe['smiles_canonical'].map(lambda smi : expanded_SMILES(smi, assign_map_nums=False, kekulize=False))
 
 # OPERATION MODES
 def format_merged(args : Namespace) -> None:
@@ -46,14 +80,15 @@ def format_merged(args : Namespace) -> None:
     output_path = args.output_dir / args.output_file
     validate_file_path(output_path, check_missing=False, check_already_exists=not args.allow_overwrites, valid_extensions=WRITER_FNS_BY_EXT)
 
-    rxn_mapping = read_rxn_mapping_data(args.rxn_mapping_path)
     monomer_paths = sanitize_monomer_data_paths(args)
     monomer_dfs = read_monomer_data(monomer_paths)
     for df in monomer_dfs:
         standardize_monomer_data_columns(df)
 
     master_df = pd.concat(monomer_dfs) # columns we care about should be aligned now that the dataframes are standardized
-    label_monomer_statepoint_data(master_df, rxn_mapping=rxn_mapping, uniquify_chemistry=args.uniquify_chemistry) # only reformat and uniquify AFTER merge
+    if args.uniquify_chemistry: # only uniquify AFTER merge (may have chemical duplicates split amongst multiple files)
+        logging.info('Purging monomer records with duplicate chemistries')
+        master_df.drop_duplicates('smiles_canonical', inplace=True)
     
     if args.keep_n is not None:
         keep_n = min(args.keep_n, len(master_df)) # clamp number of sample to the size of the dataset
@@ -103,12 +138,13 @@ def format_sequential(args : Namespace) -> None:
             output_paths.append(output_path)
 
     # read, reformat, and write out data
-    rxn_mapping = read_rxn_mapping_data(args.rxn_mapping_path)
     monomer_dfs = read_monomer_data(monomer_paths)
-
     for monomer_df, output_path in zip(monomer_dfs, output_paths):
         standardize_monomer_data_columns(monomer_df)
-        label_monomer_statepoint_data(monomer_df, rxn_mapping=rxn_mapping, uniquify_chemistry=args.uniquify_chemistry) 
+        if args.uniquify_chemistry: # only uniquify AFTER merge (may have chemical duplicates split amongst multiple files)
+            logging.info('Purging monomer records with duplicate chemistries')
+            monomer_df.drop_duplicates('smiles_canonical', inplace=True)
+        
         # NOTE: don't need to validate output, as this was done in the output path compile step prior
         writer_fn = WRITER_FNS_BY_EXT[output_path.suffix]
         logging.info(f'Writing monomer data to {output_path}...')
@@ -123,7 +159,7 @@ def main() -> None:
     subparsers = parser.add_subparsers()
 
     # auxiliary parser for handling shared input parameters between both substrategies
-    input_parser = ArgumentParser(add_help=False) 
+    input_parser = ArgumentParser(add_help=False) # NOTE: this is absolutely necessary, as removing it causes "confliction option strings" errors on any script calls
     file_input_group = input_parser.add_mutually_exclusive_group(required=True)
     file_input_group.add_argument(
         '-mdat',
@@ -138,14 +174,6 @@ def main() -> None:
         help='A glob pattern to use to locate input files',
     )
 
-    input_parser.add_argument( 
-        '-rxns',
-        '--rxn-mapping-path',
-        type=Path,
-        required=True,
-        help='The path to a JSON file containing a reaction name mapping\n' \
-            'Should contain dict whose keys are reaction names and whose values are reaction SMARTS strings'
-    )
     input_parser.add_argument(
         '-od',
         '--output-dir',
