@@ -72,7 +72,7 @@ from polymerist.genutils.fileutils.pathutils import is_empty
 from polymerist.genutils.logutils.IOHandlers import submodule_loggers, get_active_loggers
 POLYMERIST_LOGGERS = [
     logger
-        for logger in submodule_loggers(ps).values()
+        for logger in submodule_loggers(ps, blacklist=['tests']).values()
             if (logger is not None) and (not isinstance(logger, logging.PlaceHolder))
 ] # TODO: move this into polymerist?
 

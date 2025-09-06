@@ -16,14 +16,10 @@ from typing import Iterable
 
 # Custom utils imports 
 try: # call as python module
-    from .utils.filelib import validate_file_path
-    from .utils.dataIO import WRITER_FNS_BY_EXT
-    from .utils.dataIO import read_monomer_data
+    from .utils.dataIO import validate_file_path, WRITER_FNS_BY_EXT, read_monomer_data
     from .utils.cheminf import parse_monomer_smiles
 except ImportError: # call as script file
-    from utils.filelib import validate_file_path
-    from utils.dataIO import WRITER_FNS_BY_EXT
-    from utils.dataIO import read_monomer_data
+    from utils.dataIO import validate_file_path, WRITER_FNS_BY_EXT, read_monomer_data
     from utils.cheminf import parse_monomer_smiles
     
 from polymerist.genutils.textual.prettyprint import stringify_dict
