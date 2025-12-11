@@ -125,7 +125,7 @@ except ImportError: # call as script file
 # DEFINING THE SIGNAC PROJECT CLASS PROPER 
 class PolymerBuildProject(FlowProject):
     '''Project for automated high-throughput generation of polymer structure and MD inputs from chemical data'''
-    # GLOBAL CONFIG - TODO: make these configuratble via argparse to the containing script
+    # GLOBAL CONFIG - TODO: make these configuratble via argparse to the containing script; move to separate parameters dataclass?
     ## LOGGING AND REPORTING FORMATS
     QUANTITY_PRECISION  : ClassVar[int] = 4 # number of decimal places to report Quantities when logging
     LOGLEVEL            : ClassVar[int] = logging.INFO
@@ -141,13 +141,13 @@ class PolymerBuildProject(FlowProject):
     
     SANITIZE_OPS        : ClassVar[SanitizeFlags] = SanitizeFlags.SANITIZE_ALL
     AROMATICITY_MODEL   : ClassVar[AromaticityModel] = AromaticityModel.AROMATICITY_MDL
-    REGISTERED_RXNS     : ClassVar[dict[str, AnnotatedReaction]] = {}
+    REGISTERED_RXNS     : ClassVar[dict[str, AnnotatedReaction]] = dict()
     
     ENERGY_MINIMIZE_OLIGOMERS : ClassVar[bool] = True # whether to perform brief UFF energy minimization when generating oligomer conformers
     
     ### ATOMS AND MONOMERS WHICH ARE, FOR ONE REASON OR ANOTHER, NOT ALLOWED
-    BLACKLISTED_ATOM_QUERIES : ClassVar[dict[str, Chem.QueryAtom]] = {}
-    BLACKLISTED_MONOMER_MOLS : ClassVar[dict[str, Chem.Mol]] = {}
+    BLACKLISTED_ATOM_QUERIES : ClassVar[dict[str, Chem.QueryAtom]] = dict()
+    BLACKLISTED_MONOMER_MOLS : ClassVar[dict[str, Chem.Mol]] = dict()
     
     @classmethod # inject configure chemical sanitization setting
     def sanitized_mol_from_smiles(cls, smiles : str, separate_mols : bool=True) -> Union[Chem.Mol, tuple[Chem.Mol]]:
@@ -175,7 +175,7 @@ class PolymerBuildProject(FlowProject):
     LAMMPS_DIR        : ClassVar[str] = 'LAMMPS'
     LAMMPS_INPUT_PATH : ClassVar[str] = f'{LAMMPS_DIR}/inputs.in'
     LAMMPS_DATA_PATH  : ClassVar[str] = f'{LAMMPS_DIR}/data.lmp'
-    LAMMPS_PATHS : ClassVar[list[str]] = (
+    LAMMPS_PATHS : ClassVar[tuple[str, ...]] = (
         LAMMPS_INPUT_PATH,
         LAMMPS_DATA_PATH,
     )
@@ -187,7 +187,7 @@ class PolymerBuildProject(FlowProject):
     OPENMM_SYSTEM_PATH : ClassVar[str] = f'{OPENMM_DIR}/system.xml'
     OPENMM_TOPO_PATH   : ClassVar[str] = f'{OPENMM_DIR}/topology.pdb'
     OPENMM_INTEG_PATH  : ClassVar[str] = f'{OPENMM_DIR}/integrator.xml'
-    OPENMM_PATHS : ClassVar[list[str]] = (
+    OPENMM_PATHS : ClassVar[tuple[str, ...]] = (
         OPENMM_STATE_PATH,
         OPENMM_SYSTEM_PATH,
         OPENMM_TOPO_PATH,
@@ -207,7 +207,7 @@ PolymerBuildProject.BLACKLISTED_ATOM_QUERIES = {
     
 # DEVNOTE: one would think this could be automated by setting a cap on the number of automorphisms, but this cap grows far too quickly
 # with the computational cost of evaluating those automorhpisms (via cap on number of substruct matches) to be work it
-_blacklisted_monomer_smiles : tuple[str] = ( # monomers which are, for one reason or another, disallowed
+_blacklisted_monomer_smiles : tuple[str, ...] = ( # monomers which are, for one reason or another, disallowed
     'CC(C)(C)c1cc(c(Oc2ccc(cc2)N(c3ccc(N)cc3)c4ccc(N)cc4)c(c1)C(C)(C)C)C(C)(C)C',  # the extraordinary number of symmetries of this amine ("4-N-(4-aminophenyl)-4-N-[4-(2,4,6-tritert-butylphenoxy)phenyl]benzene-1,4-diamine")... 
     'CC(C)(C)c1cc(Oc2ccc(-c3ccc(N)cc3)cc2C(F)(F)F)c(C(C)(C)C)cc1Oc1ccc(-c2ccc(N)cc2)cc1C(F)(F)F', # ...mean it takes impractically long to isomorphism match during the Topology partition step
     'CCCCCCCCCCCCCCCCC(CO)C(CO)CCCCCCCCCCCCCCCC',
@@ -1132,7 +1132,7 @@ def evaluate_energies_openmm(job : Job) -> None:
 
         omm_pot_raw = {
             e_name.removesuffix(' potential energy').removesuffix(' force') : e_val
-                for e_name, e_val in omm_pot.items()
+                for e_name, e_val in omm_pot.items() #TODO: revisit that this still works after polymerist 1.0.1 updates
         }
         energies_omm = {
             'Potential' : omm_pot_raw['Total'],
@@ -1160,7 +1160,7 @@ def main() -> None:
         default=Path.cwd(),
         # required=True, # NOTE: while this SHOULD BE required, making it so prevents Signac from submitting jobs with a scheduler (fails due to missing required args)
         help='Path to the directory in which the (presumed initialized) Signac project statepoints reside',
-    ),
+    )
     parser.add_argument( 
         '-rxns',
         '--rxn-mapping-path',
@@ -1216,7 +1216,14 @@ def main() -> None:
         action='store_true',
         help='Whether to disable brief UFF energy minimization when generating oligomer conformers'
     )
-    # TODO : implement log level setting
+    parser.add_argument(
+        '-l',
+        '--loglevel',
+        type=str.upper, # makes choices case-insensitive
+        default='INFO',
+        choices=logging._levelToName.values(),
+        help='Level of verbosity for logging outputs',
+    )
 
     # separate this script's args from those required by signac
     start_args, signac_args = parser.parse_known_args()
@@ -1239,9 +1246,9 @@ def main() -> None:
         assert n_err == 0
         
         PolymerBuildProject.REGISTERED_RXNS[rxnname] = rxn
-    
-    # PolymerBuildProject.LOGLEVEL = ...
-    logging.basicConfig(level=PolymerBuildProject.LOGLEVEL, force=True)
+
+    PolymerBuildProject.LOGLEVEL = logging.getLevelNamesMapping()[start_args.loglevel]
+    logging.basicConfig(level=start_args.loglevel, force=True) # DEV: should this even be be set globally?
 
     # initialize Project instance for interpreter session
     project_hooks = ProjectHooks(operation_times_attr='operation_times_sec', indent_amount=start_args.indent)
