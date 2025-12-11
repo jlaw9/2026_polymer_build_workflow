@@ -9,8 +9,8 @@ from src.project import PolymerBuildProject # my custom tooling for this project
 # load project from workspace
 output_path = Path('oligomer_SMILES_for_ML_updated.csv')
 
-project_dir = Path('polyID_production_expanded')
-# project_dir = Path('polyID_production')
+project_dir = Path('polyID_production_LAMMPS')
+# project_dir = Path('polyID_production_expanded')
 project = PolymerBuildProject.get_project(project_dir)
 # print(len(project))
 
