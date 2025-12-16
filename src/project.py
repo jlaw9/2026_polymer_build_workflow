@@ -99,27 +99,16 @@ from polymerist.rdutils.reactions.fragment import CutMinimumCostBondsStrategy
 
 from polymerist.smileslib.cleanup import expanded_SMILES
 
-# Utils imports - made these non-relative to avoid screwing up external vs internal call
-try: # call as python module
-    from .utils.logs import redirect_to_logfile
-    from .utils.dataIO import read_rxn_mapping_data
-    from .utils.offlib import elem_counts
-    from .utils.packing import generate_uniform_subpopulated_lattice
-    from .utils.mdexport import interchange_to_openmm
-    from .utils.jobhooks import ProjectHooks
+# Utils imports
+from utils.logs import redirect_to_logfile
+from utils.dataIO import read_rxn_mapping_data
+from utils.offlib import elem_counts
+from utils.packing import generate_uniform_subpopulated_lattice
+from utils.mdexport import interchange_to_openmm
+from utils.jobhooks import ProjectHooks
 
-    from .reactions import RXNS_DIR
-    from .environments.cuboulder import CUAlpineEnvironment, CUBlancaShirtsEnvironment # inject CURC-specific environment config
-except ImportError: # call as script file
-    from utils.logs import redirect_to_logfile
-    from utils.dataIO import read_rxn_mapping_data
-    from utils.offlib import elem_counts
-    from utils.packing import generate_uniform_subpopulated_lattice
-    from utils.mdexport import interchange_to_openmm
-    from utils.jobhooks import ProjectHooks
-
-    from reactions import RXNS_DIR
-    from environments.cuboulder import CUAlpineEnvironment, CUBlancaShirtsEnvironment # inject CURC-specific environment config
+from reactions import RXNS_DIR
+from environments.cuboulder import CUAlpineEnvironment, CUBlancaShirtsEnvironment # inject CURC-specific environment config
 
 
 # DEFINING THE SIGNAC PROJECT CLASS PROPER 
@@ -1165,7 +1154,7 @@ def main() -> None:
         '-rxns',
         '--rxn-mapping-path',
         type=Path,
-        default=RXNS_DIR/'rxns_polyID.json',
+        default=RXNS_DIR/'rxns_polyID.json', # DEV: consider leaving this unspecified? (force called to provide full path, rather than passing around)
         help='The path to a JSON file containing a reaction name mapping\n' \
             'Should contain dict whose keys are reaction names and whose values are reaction SMARTS strings'
     )

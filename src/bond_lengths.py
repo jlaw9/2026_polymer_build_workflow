@@ -66,7 +66,7 @@ if __name__ == '__main__':
         type=Path,
         default=Path.cwd(),
         help='Path to the directory in which the (presumed initialized) Signac project statepoints reside',
-    ),
+    )
     input_parser.add_argument(
         '-od',
         '--output-dir',
