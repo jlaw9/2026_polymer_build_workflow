@@ -17,7 +17,7 @@ if [[ $runlevel == $FLAG_TEST ]]; then
     
     echo "Initializing test project..."
     projdir="${projname}_test"
-    python -m src.init_signac -mdat $datapath -num $n_sampled --random --project-name $projdir -od $outdir || status="failed"
+    python src/init_signac.py -mdat $datapath -num $n_sampled --random --project-name $projdir -od $outdir || status="failed"
     
     if [ $status = "initialized" ]; then
         cp -r 'src/templates' $projdir
@@ -28,7 +28,7 @@ elif [[ $runlevel == $FLAG_PROD ]]; then
 
     echo "Initializing production-scale project..."
     projdir="${projname}_production"
-    python -m src.init_signac -mdat $datapath --project-name $projdir -od $outdir || status="failed"
+    python src/init_signac.py -mdat $datapath --project-name $projdir -od $outdir || status="failed"
 
     if [ $status = "initialized" ]; then
         cp -r 'src/templates' $projdir

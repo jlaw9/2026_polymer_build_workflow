@@ -18,12 +18,8 @@ from polymerist.rdutils.bonding import portlib
 from polymerist.rdutils.reactions.reactions import AnnotatedReaction
 from polymerist.rdutils.reactions.assembly import ReactionAssembler
 
-try: # call as python module
-    from .__init__ import _parent_dir
-    from .utils.logs import format_error_for_log
-except ImportError: # call as script file
-    from __init__ import _parent_dir
-    from utils.logs import format_error_for_log
+from __init__ import _parent_dir
+from utils.logs import format_error_for_log
     
 RXNS_DIR = _parent_dir / 'reactions'
 RXNS_DIR.mkdir(exist_ok=True)

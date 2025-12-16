@@ -1,8 +1,8 @@
 #!/bin/sh
 
 # initialize project-wide parameters and reaction templates
-python -m src.parameters
-python -m src.reactions
+python src/parameters.py
+python src/reactions.py
 
 # create master monomer datafiles in standardized format
 bash format_mdat.sh
