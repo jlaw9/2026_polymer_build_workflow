@@ -6,22 +6,15 @@ from argparse import ArgumentParser, Namespace
 import numpy as np
 import pandas as pd
 
-from collections import defaultdict
 from pathlib import Path
 
 from signac import init_project
 
 # Internal utilities
-try: # call as python module
-    from . import _parent_dir
-    from .parameters import ParametersSwept, PARAMS_SWEPT_PATH 
-    from .parameters import ParametersConfig, PARAMS_CONFIG_PATH
-    from .utils.dataIO import validate_file_path, read_monomer_data
-except ImportError: # call as script file    
-    from __init__ import _parent_dir
-    from parameters import ParametersSwept, PARAMS_SWEPT_PATH 
-    from parameters import ParametersConfig, PARAMS_CONFIG_PATH
-    from utils.dataIO import validate_file_path, read_monomer_data
+from __init__ import _parent_dir
+from parameters import ParametersSwept, PARAMS_SWEPT_PATH 
+from parameters import ParametersConfig, PARAMS_CONFIG_PATH
+from utils.dataIO import validate_file_path, read_monomer_data
     
 from polymerist.genutils.iteration import cartesian_grid
 

@@ -1,4 +1,5 @@
 '''For creating a clone of a PolymerBuildProject containin gonly those jobs which successfully produced LAMMPS files'''
+# TODO: expand this script to support passing in an arbitrary condition
 
 import logging
 logging.basicConfig(level=logging.INFO)
@@ -7,11 +8,7 @@ from argparse import ArgumentParser, Namespace
 from shutil import copytree
 from pathlib import Path
 
-# TODO: expand this to support passing in an arbitrary condition
-try: # call as python module
-    from .project import PolymerBuildProject, exported_to_lammps
-except ImportError: # call as script file
-    from project import PolymerBuildProject, exported_to_lammps
+from project import PolymerBuildProject, exported_to_lammps
 
 
 def prepare_LAMMPS_project(args : Namespace) -> None:

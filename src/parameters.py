@@ -5,11 +5,8 @@ logging.basicConfig(level=logging.INFO)
 
 from dataclasses import dataclass, field
 
+from __init__ import _parent_dir
 from polymerist.genutils.fileutils.jsonio.jsonify import make_jsonifiable
-try: # call as python module
-    from . import _parent_dir
-except ImportError: # call as script file
-    from __init__ import _parent_dir
 
 
 # HARD-CODED PATHS WHERE PARAMETERS SHOULD LIVE
@@ -35,7 +32,7 @@ class ParametersSwept:
 
 @make_jsonifiable
 @dataclass
-class ParametersConfig:
+class ParametersConfig: # TODO: should these just be singleton sets in the cartesian product?
     '''Encapsulation class for tracking fixed configuration parameters that shouldn't be changed'''
     forcefield              : str
     minimize_oligomer       : bool

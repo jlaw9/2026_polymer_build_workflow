@@ -15,12 +15,8 @@ from pathlib import Path
 from typing import Iterable
 
 # Custom utils imports 
-try: # call as python module
-    from .utils.dataIO import validate_file_path, WRITER_FNS_BY_EXT, read_monomer_data
-    from .utils.cheminf import parse_monomer_smiles
-except ImportError: # call as script file
-    from utils.dataIO import validate_file_path, WRITER_FNS_BY_EXT, read_monomer_data
-    from utils.cheminf import parse_monomer_smiles
+from utils.dataIO import validate_file_path, WRITER_FNS_BY_EXT, read_monomer_data
+from utils.cheminf import parse_monomer_smiles
     
 from polymerist.genutils.textual.prettyprint import stringify_dict
 from polymerist.smileslib.cleanup import expanded_SMILES
@@ -56,7 +52,7 @@ def locate_attr_cols(dataframe : pd.DataFrame, columns_to_check : dict[str, Iter
 
 def standardize_monomer_data_columns(dataframe : pd.DataFrame) -> None:
     '''Standardize column naming and format of required monomer data DataFrame (in-place)'''
-    STATEPOINT_ATTR_COLUMNS : dict[str, tuple[str]] = { # the attributes to save and the column(s) to check for these values
+    STATEPOINT_ATTR_COLUMNS : dict[str, tuple[str, ...]] = { # the attributes to save and the column(s) to check for these values
         'smiles_original' : ('smiles_original', 'smiles_monomer', 'monomer', 'monomers', 'Monomer', 'Monomers'), # NOTE: !!ESSENTIAL!! for idempotency that column name come first for now
         'mechanism_labelled' : ('mechanism_labelled', 'mechanism', 'rxnname', 'Chemistry'), # NOTE: !!ESSENTIAL!! for idempotency that column name come first for now
     }
