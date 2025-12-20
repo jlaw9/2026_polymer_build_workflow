@@ -42,12 +42,11 @@ sdf_testing/*
 energy_tables/*
 openmm_test/*
 
-polyid_test/*
-polyid_scale/*
-polyid_scale_completed/*
-
 polyid_*/*
+polyid_test/*
 polyID_*/*
+polyid_scale*/*
+permeability_pilot_set/*
 
 waterbox/water_20k*.*
 
