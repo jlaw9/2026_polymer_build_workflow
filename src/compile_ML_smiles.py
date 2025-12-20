@@ -57,7 +57,7 @@ if __name__ == '__main__':
         help='Whether to permit overwriting output files which already exist (default is False)'
     )
     parser.add_argument(
-        '-ndat',
+        '-namdat',
         '--name-datafile',
         type=str,
         default='oligomer_SMILES_for_ML',
