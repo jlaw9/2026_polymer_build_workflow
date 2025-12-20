@@ -23,11 +23,11 @@ This toolkit ships with 8 classes of polymerization mechanism pre-defined by def
 * Polyurethanes
 * Polyurethanes (non-isocyanate)
   
-These are defined in [src.reactions](./src/reactions.py), and can be appended to insert other mechanisms not included here, if such chemistries are of interest. For details on how to define these reaction inputs, see the [`polymerist` reaction examples](https://github.com/timbernat/polymerist_examples/tree/main/1-polymerization)
+These are defined in [src.reactions](./src/reactions.py), and can be appended to insert other mechanisms not included here, if such chemistries are of interest. For details on how to define these reaction inputs, see the [`polymerist` reaction assembly tutorials](https://github.com/timbernat/polymerist_examples/tree/main/1-polymerization)
 
 Once you're satisfied with the mechanisms defined, initialized the SMARTS templates for these reaction definitions by running:
 ```sh
-bash src/reactions.py
+python -m src.reactions
 ```
 
 ## Parameters
@@ -40,17 +40,43 @@ System size and force field parameters for each system build job are configured 
 
 Once you're satisfied with the parameters, initialize and cache them by running:
 ```sh
-bash src/reactions.py
+python -m src.parameters
 ```
 
 ## Supplying monomer data
-Finally, provide your monomer data as a csv with the column containing you monomer smiles strings as in a column labelled. 
+Formatting for monomer data inputs is (by design) very tolerant, and requires only a handful of criteria to be met to use as the basis for a polymer project. Namely, a monomer data input file must consist of:
+* A tabular file in either .csv or .xlsx format
+* Containing one column (field) titled any of the following:
+  * `smiles_original`
+  * `smiles_monomer`
+  * `monomer_smiles`
+  * `monomer`
+  * `monomers`
+  * `Monomer`
+  * `Monomers`
+* With records whose value for that field consist of either
+  * A tuple of SMILES strings for each distinct monomer (e.g. for PET, have `('COC(=O)c1ccc(cc1)C(=O)OC', 'OCCO')`)
+  * A single SMILES string with a [disconnection](https://www.daylight.com/meetings/summerschool98/course/dave/smiles-disco.html) (single period character) separating the distinct monomers (e.g. for PET, have `'COC(=O)c1ccc(cc1)C(=O)OC.OCCO'`)
 
-**TODO: add details on formatting**
+Any additional fields in each record of the data file can contain arbitrary data related to the monomer preparation e.g. name for resulting polymer, expected polymer density, labelled mechanism of polymerization, etc. These additional fields are transferred to the `document` portion of any job acting on the specified monomer chemistry in that record.
 
-On first-time use, the parameter sets and reaction mechanism templates defined for your project need to be initialized. This is as easy as running:
+Once you have supplied you monomer data file(s), you can preprocess them to ensure formatting compliance with the `src.format_data` util. This supports two formatting modes:
+* `Merge`: combines one or more data files into a single, formatted "master" file
+* `Sequential`: takes one of more data files and formats each separately into the same number of formatted datafiles
+
+Monomer data files can be identified by either of the following mutually-exclusive options:
+* Names of files: pass as list after `-mdat`/`--monomer-paths` flag
+* Search pattern: pass as file regex pattern after `-g`/`--glob` flag
+
+Many formatting utilities are supplied, including uniqufication of chemistry, subselection of data, etc. For more details on formatting options, run
 ```sh
-bash format_mdat.sh # this is actually pretty specific to the PolyID study; want to extend before final publication
+python -m src.format_data merge --help
+python -m src.format_data sequence --help
+```
+
+As a quickstart example, if you have only one monomer data file, you should run in `sequential` mode as:
+```sh
+python -m src.format_data sequence -mdat <path to datafile> -od <output-directory> --postfix "fmt"
 ```
 
 # Project
@@ -104,7 +130,7 @@ python -m src.project \
   submit \
   --parallel \
   --bundle 6 \
-  -o <opngrp> \
+  -o <opgrp> \
   <any other args you define in your ComputeEnvironment template> \
   --job-output <logfilename.out> \
 ```
