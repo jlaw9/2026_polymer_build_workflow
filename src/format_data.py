@@ -8,11 +8,11 @@ warnings.filterwarnings(action='ignore')
 
 # Command line interface
 from argparse import ArgumentParser, Namespace
+from typing import Iterable, Mapping
 
 # File I/O
 import pandas as pd
 from pathlib import Path
-from typing import Iterable
 
 # Custom utils imports 
 from polymerist.genutils.textual.prettyprint import stringify_dict
@@ -33,9 +33,11 @@ def sanitize_monomer_data_paths(args : Namespace) -> list[Path]:
         return args.monomer_paths
     elif args.glob is not None:
         return [path for path in Path.cwd().glob(args.glob)]
+    else:
+        raise ValueError('Must provide either monomer data paths or a glob pattern to locate input files')
     
 ## STANDARDIZING MONOMER DATASET FIELDS
-def locate_attr_cols(dataframe : pd.DataFrame, columns_to_check : dict[str, Iterable[str]]) -> dict[str, str]:
+def locate_attr_cols(dataframe : pd.DataFrame, columns_to_check : Mapping[str, Iterable[str]]) -> dict[str, str]:
     '''Takes a dataframe of monomer training data and a dict of desired attributes and the columns in the dataframe it might be found in
     Checks that those columns are present and returns dict with first column for each if all are present, or NoneType otherwise'''
     attr_columns : dict[str, str] = {}
