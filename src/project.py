@@ -63,7 +63,6 @@ from openff.units import (
     Unit as OFFUnit,
     Quantity as OFFQuantity,
 )
-
 from openff.interchange import Interchange
 
 # Custom (polymerist)
@@ -100,15 +99,15 @@ from polymerist.rdutils.reactions.fragment import CutMinimumCostBondsStrategy
 from polymerist.smileslib.cleanup import expanded_SMILES
 
 # Utils imports
-from utils.logs import redirect_to_logfile
-from utils.dataIO import read_rxn_mapping_data
-from utils.offlib import elem_counts
-from utils.packing import generate_uniform_subpopulated_lattice
-from utils.mdexport import interchange_to_openmm
-from utils.jobhooks import ProjectHooks
+from .utils.logs import redirect_to_logfile
+from .utils.dataIO import read_rxn_mapping_data
+from .utils.offlib import elem_counts
+from .utils.packing import generate_uniform_subpopulated_lattice
+from .utils.mdexport import interchange_to_openmm
+from .utils.jobhooks import ProjectHooks
 
-from reactions import RXNS_DIR
-from environments.cuboulder import CUAlpineEnvironment, CUBlancaShirtsEnvironment # inject CURC-specific environment config
+from .reactions import RXNS_DIR
+from .environments.cuboulder import CUAlpineEnvironment, CUBlancaShirtsEnvironment # inject CURC-specific environment config
 
 
 # DEFINING THE SIGNAC PROJECT CLASS PROPER 

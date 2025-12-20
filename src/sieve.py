@@ -8,7 +8,7 @@ from argparse import ArgumentParser, Namespace
 from shutil import copytree
 from pathlib import Path
 
-from project import PolymerBuildProject, exported_to_lammps
+from .project import PolymerBuildProject, exported_to_lammps
 
 
 def prepare_LAMMPS_project(args : Namespace) -> None:

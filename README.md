@@ -75,13 +75,13 @@ The operations available to you on a polymer build project are largely the same 
 
 To check the status of a project, run
 ```sh
-python src/project.py -path <path_to_project> -rxns <path_to_rxns_json> status
+python -m src.project -path <path_to_project> -rxns <path_to_rxns_json> status
 ```
 where `<path_to_project>` is the path to the directory created during project initialization and `<path_to_rxns_json>` is the path to the JSON file created during reaction initilaization.
 
 To run structure build jobs locally, run:
 ```sh
-python src/project.py -path <path_to_project> -rxns <path_to_rxns_json> run -o <opgrp>
+python -m src.project -path <path_to_project> -rxns <path_to_rxns_json> run -o <opgrp>
 ```
 Valid operation group names (to be substituted for `<opgrp>` above) for the PolymerBuildProject defined here are, in order):
 * everything (runs all of below)
@@ -99,7 +99,7 @@ Operations later in this list cannot be requested to run before operations earli
 
 To submit build jobs to cluster, run:
 ```sh
-python src/project.py \
+python -m src.project \
   -path <path_to_project> \
   submit \
   --parallel \
@@ -115,13 +115,13 @@ python src/project.py \
 Beyond managing parameter config, project setup, status tracking, and job submission, the source code provided with this repository also provides you with a few other useful utilities including:
 
 ## Automated ring piercing detection
-See `python src/analyze_piercing.py --help`
+See `python -m src.analyze_piercing --help`
 
 ## Bond length distribution compilation and plotting
-See `python src/bond_lengths.py --help`
+See `python -m src.bond_lengths --help`
 
 ## Extracting subset of jobs matching criterion to new project
-See `python src/sieve.py --help`
+See `python -m src.sieve --help`
 
 ## Polymer SMILES compilation for machine learning training
-See `python src/compile_ML_smiles.py --help`
+See `python -m src.compile_ML_smiles --help`

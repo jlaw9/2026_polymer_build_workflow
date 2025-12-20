@@ -5,8 +5,8 @@ logging.basicConfig(level=logging.INFO)
 
 from dataclasses import dataclass, field
 
-from __init__ import _parent_dir
 from polymerist.genutils.fileutils.jsonio.jsonify import make_jsonifiable
+from . import _parent_dir
 
 
 # HARD-CODED PATHS WHERE PARAMETERS SHOULD LIVE

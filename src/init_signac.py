@@ -11,12 +11,12 @@ from pathlib import Path
 from signac import init_project
 
 # Internal utilities
-from __init__ import _parent_dir
-from parameters import ParametersSwept, PARAMS_SWEPT_PATH 
-from parameters import ParametersConfig, PARAMS_CONFIG_PATH
-from utils.dataIO import validate_file_path, read_monomer_data
-    
 from polymerist.genutils.iteration import cartesian_grid
+
+from . import _parent_dir
+from .parameters import ParametersSwept, PARAMS_SWEPT_PATH 
+from .parameters import ParametersConfig, PARAMS_CONFIG_PATH
+from .utils.dataIO import validate_file_path, read_monomer_data
 
 
 # Helper functions

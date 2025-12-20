@@ -5,8 +5,8 @@ from pathlib import Path
 import pandas as pd
 
 from rdkit import Chem
-from project import PolymerBuildProject # my custom tooling for this project
 from polymerist.genutils.fileutils.pathutils import assemble_path
+from .project import PolymerBuildProject # my custom tooling for this project
 
 
 # compile SMILES from structure files

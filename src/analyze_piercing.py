@@ -14,9 +14,10 @@ from rdkit import Chem
 from rdkit.Chem.rdmolfiles import SDMolSupplier
 from rdkit.Chem.rdmolops import Get3DDistanceMatrix
 
-from project import PolymerBuildProject
 from polymerist.genutils.fileutils.pathutils import assemble_path
 from polymerist.rdutils.rdcoords.piercing import summarize_ring_piercing
+
+from .project import PolymerBuildProject
 
 
 ANGSTROM : str = "\u212B"
