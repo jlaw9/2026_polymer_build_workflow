@@ -38,7 +38,11 @@ reindent_json_document   : Callable[[Job, Optional[int]], None] = reindent_job_j
 
 # JOB HOOKS
 class ProjectHooks:
-    def __init__(self, operation_times_attr : str='operation_times_sec', indent_amount : Optional[int]=4):
+    def __init__(
+        self,
+        operation_times_attr : str='operation_times_sec',
+        indent_amount : Optional[int]=4,
+    ) -> None:
         self.operation_times_attr = operation_times_attr
         self.indent_amount = indent_amount
         
