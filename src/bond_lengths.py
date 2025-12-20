@@ -106,7 +106,6 @@ def plot_bond_length_distribution(
 
     if bond_bin_edges is None:
         bond_bin_edges = [0.9, 1.6]
-    bond_bin_edges = np.array(bond_bin_edges)
 
     assert len(ticks_per_angstrom_binned) == (len(bond_bin_edges) + 1)
     bond_bin_idxs = np.digitize(all_bond_dists, bins=bond_bin_edges)
