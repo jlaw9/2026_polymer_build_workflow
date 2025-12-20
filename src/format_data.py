@@ -15,11 +15,11 @@ from pathlib import Path
 from typing import Iterable
 
 # Custom utils imports 
-from utils.dataIO import validate_file_path, WRITER_FNS_BY_EXT, read_monomer_data
-from utils.cheminf import parse_monomer_smiles
-    
 from polymerist.genutils.textual.prettyprint import stringify_dict
 from polymerist.smileslib.cleanup import expanded_SMILES
+
+from .utils.dataIO import validate_file_path, WRITER_FNS_BY_EXT, read_monomer_data
+from .utils.cheminf import parse_monomer_smiles
     
 
 # HELPER FUNCTIONS

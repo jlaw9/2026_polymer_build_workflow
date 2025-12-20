@@ -26,8 +26,8 @@ from matplotlib.axes import Axes
 from rdkit.Chem.rdmolfiles import SDMolSupplier
 from rdkit.Chem.rdmolops import Get3DDistanceMatrix
 
-from project import PolymerBuildProject
 from polymerist.genutils.fileutils.pathutils import assemble_path
+from .project import PolymerBuildProject
 
 logging.getLogger('numexpr.utils').setLevel(logging.CRITICAL) # suppress numpy logs
 logging.getLogger('reactions').setLevel(logging.CRITICAL) # suppress logs from src.reactions (called on .project import)
