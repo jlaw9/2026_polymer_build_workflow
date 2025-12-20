@@ -29,9 +29,9 @@ def sanitize_monomer_data_paths(args : Namespace) -> list[Path]:
     if not args.output_dir.is_dir():
         args.output_dir.mkdir()
 
-    if args.glob is None:
+    if args.monomer_paths is not None:
         return args.monomer_paths
-    elif args.monomer_paths is None:
+    elif args.glob is not None:
         return [path for path in Path.cwd().glob(args.glob)]
     
 ## STANDARDIZING MONOMER DATASET FIELDS
@@ -45,7 +45,7 @@ def locate_attr_cols(dataframe : pd.DataFrame, columns_to_check : dict[str, Iter
                 attr_columns[targ_attr] = col_name
                 break
         else:
-            raise IndexError(f'No matching columns for attribute "{targ_attr} were found from queries: "{col_names_to_check}"')
+            raise IndexError(f'No matching columns for attribute "{targ_attr}" were found from queries: "{col_names_to_check}"')
     logging.info('Found valid columns name mappings:\n\t' + stringify_dict(attr_columns))
         
     return attr_columns
@@ -53,8 +53,9 @@ def locate_attr_cols(dataframe : pd.DataFrame, columns_to_check : dict[str, Iter
 def standardize_monomer_data_columns(dataframe : pd.DataFrame) -> None:
     '''Standardize column naming and format of required monomer data DataFrame (in-place)'''
     STATEPOINT_ATTR_COLUMNS : dict[str, tuple[str, ...]] = { # the attributes to save and the column(s) to check for these values
-        'smiles_original' : ('smiles_original', 'smiles_monomer', 'monomer', 'monomers', 'Monomer', 'Monomers'), # NOTE: !!ESSENTIAL!! for idempotency that column name come first for now
-        'mechanism_labelled' : ('mechanism_labelled', 'mechanism', 'rxnname', 'Chemistry'), # NOTE: !!ESSENTIAL!! for idempotency that column name come first for now
+        'smiles_original' : ('smiles_original', 'smiles_monomer', 'monomer_smiles', 'monomer', 'monomers', 'Monomer', 'Monomers'), # NOTE: !!ESSENTIAL!! for idempotency that column name come first for now
+        # DEV: as of 12/19/25, have deprecated requirement for labelled mechanism (since the workflow does not require that info to run)
+        # 'mechanism_labelled' : ('mechanism_labelled', 'mechanism', 'rxnname', 'Chemistry'), # NOTE: !!ESSENTIAL!! for idempotency that column name come first for now
     }
     attr_locs = locate_attr_cols(dataframe, STATEPOINT_ATTR_COLUMNS) # this will raise Exception if any of the fields cannot be found
     dataframe.rename(
@@ -115,7 +116,7 @@ def format_sequential(args : Namespace) -> None:
         logging.info('Determining output file names via the "postfix" directive')
         output_paths : list[Path] = []
         for input_path in monomer_paths:
-            output_path = args.output_dir / f'{input_path.stem}_{args.postfix}{input_path.suffix}'
+            output_path = args.output_dir / f'{input_path.stem}{"_" if args.postfix else ""}{args.postfix}{input_path.suffix}'
             validate_file_path(output_path, check_missing=False, check_already_exists=not args.allow_overwrites, valid_extensions=WRITER_FNS_BY_EXT)
             output_paths.append(output_path)
 
