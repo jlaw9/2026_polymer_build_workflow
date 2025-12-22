@@ -40,8 +40,8 @@ preparations = [
         'PEF',
     ),
     MonomerInfo(
-        'poly(lactic acid)',
-        ('OC(C)C(=O)O',),
+        'poly(L-lactic acid)',
+        ('C[C@@H](C(=O)O)O',),
         'PLLA',
     ),
     MonomerInfo(
