@@ -23,7 +23,7 @@ pierced_systems.csv
 # source data for polymer build jobs
 src/monomer_data
 src/reactions
-src/parameters
+# src/parameters
 
 # plot outputs
 molecule_sizes/*
@@ -43,9 +43,7 @@ energy_tables/*
 openmm_test/*
 
 polyid_*/*
-polyid_test/*
 polyID_*/*
-polyid_scale*/*
 permeability_pilot_set/*
 
 waterbox/water_20k*.*
