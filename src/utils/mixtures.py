@@ -1,7 +1,11 @@
 '''For representing mixtures of molecules, and converting between common bases for amount of species'''
 
+from argparse import ArgumentParser, Namespace, Action
+
 from typing import Any, Hashable, Optional
 from collections import UserDict
+
+from rdkit.Chem import CanonSmiles
 from polymerist.genutils.fileutils.jsonio.serialize import TypeSerializer
 
 
@@ -14,7 +18,7 @@ class MixtureSpec(UserDict):
             super().__init__(**kwargs)
         else:
             initdict = {
-                Chem.CanonSmiles(smi) : amount # TODO: eventually, add support for choice of basis (as (amount, basis) pairs)
+                CanonSmiles(smi) : amount # TODO: eventually, add support for choice of basis (as (amount, basis) pairs)
                     for smi, amount in initdict.items()
             }
             super().__init__(initdict, **kwargs)
@@ -42,3 +46,14 @@ class MixtureSpecSerializer(TypeSerializer, python_type=MixtureSpec):
     @staticmethod
     def decode(json_obj : dict) -> MixtureSpec:
         return MixtureSpec(json_obj)
+
+class ParseMixtureSpec(Action):
+    def __call__(
+        self,
+        parser : ArgumentParser,
+        args : Namespace,
+        values : str,
+        option_string : Optional[str]=None,
+    ) -> None:
+        # setattr(args, self.dest, ...)
+        raise NotImplementedError('Command line specification of multi-component mixtures with extents not implemented')
