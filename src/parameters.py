@@ -14,7 +14,7 @@ from dataclasses import dataclass, field, fields
 import json
 from pathlib import Path
 
-from polymerist.genutils.fileutils.pathutils import assemble_path
+from polymerist.genutils.fileutils.pathutils import assemble_path, allow_string_paths
 from polymerist.genutils.fileutils.jsonio.jsonify import make_jsonifiable
 from polymerist.genutils.fileutils.jsonio.serialize import JSONSerializable
 # from polymerist.mdtools.openfftools.partialcharge.molchargers import MolCharger
@@ -64,17 +64,12 @@ def standardize_params_swept(json_dict : dict[str, JSONSerializable]) -> Mapping
     
     return params_swept
 
-
-def write_params_json(args : Namespace) -> None:
-    args.output_dir.mkdir(parents=False, exist_ok=True)
-    path_config = assemble_path(args.output_dir, args.name_datafile, extension='.json')
-    if (not args.allow_overwrites) and path_config.exists():
-        raise FileExistsError(f'Attempted to overwrite extant file {path_config!s}')
-
+@allow_string_paths
+def write_params_json(path_config : Path, **kwargs) -> None:
     LOGGER.info('Writing swept parameters to file...')
     with path_config.open('w') as file_config:
         json.dump(
-            standardize_params_swept(vars(args)),
+            standardize_params_swept(kwargs),
             file_config,
             indent=4,
             default=MixtureSpecSerializer.encode,
@@ -194,8 +189,15 @@ if __name__ == '__main__':
         default=0.0,
         help='Extra amount (in nanometers) to pad packed box away from each face beyond tight bounding box dimensions',
     )
-    parser_write.set_defaults(func=write_params_json)
 
     # parse args from subparser and dispatch
     args = parser.parse_args()
-    args.func(args)
+
+    if args.subparser == 'write':
+        ## assemble output path
+        args.output_dir.mkdir(parents=False, exist_ok=True)
+        path_config = assemble_path(args.output_dir, args.name_datafile, extension='.json')
+        if (not args.allow_overwrites) and path_config.exists():
+            raise FileExistsError(f'Attempted to overwrite extant file {path_config!s}')
+
+        write_params_json(path_config, **vars(args))
