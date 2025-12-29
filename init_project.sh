@@ -5,7 +5,7 @@ runlevel=$1
 n_sampled="${2:-6}"
 datapath="${3:-"src/monomer_data/PolyID_master_unique.csv"}"
 projname="${4:-"polyID"}"
-outdir="${5:-"src"}"
+outdir="${5:-"."}"
 
 
 # internal values
@@ -20,7 +20,6 @@ if [[ $runlevel == $FLAG_TEST ]]; then
     python -m src.init_signac -mdat $datapath -num $n_sampled --random --project-name $projdir -od $outdir || status="failed"
     
     if [ $status = "initialized" ]; then
-        cp -r 'src/templates' $projdir
         echo "Project directory '${projdir}' created for ${n_sampled} random chemistries"
     fi
 elif [[ $runlevel == $FLAG_PROD ]]; then
@@ -31,7 +30,6 @@ elif [[ $runlevel == $FLAG_PROD ]]; then
     python -m src.init_signac -mdat $datapath --project-name $projdir -od $outdir || status="failed"
 
     if [ $status = "initialized" ]; then
-        cp -r 'src/templates' $projdir
         echo "Project directory '${projdir}' created"
     fi
 else
