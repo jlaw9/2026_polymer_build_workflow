@@ -10,12 +10,12 @@ from pathlib import Path
 
 # VALIDATNG FILES
 def validate_file_path(
-        path : Path,
-        check_missing : bool=False,
-        check_already_exists : bool=False,
-        check_has_extension : bool=False,
-        valid_extensions : Optional[Container[str]]=None,
-    ) -> None:
+    path : Path,
+    check_missing : bool=False,
+    check_already_exists : bool=False,
+    check_has_extension : bool=False,
+    valid_extensions : Optional[Container[str]]=None,
+) -> None:
     '''Check that a path exists, is pathlike, and has a valid extension
     Performs no check by default if no arguments other than the path are passed; these NEED to be supplied when called!'''
     # Meta-error for nonsensical argument checks
