@@ -163,29 +163,32 @@ if __name__ == '__main__':
     subparsers = parser.add_subparsers(dest='subparser') # need to keep track (rather than using default arg.func) since input are also post-processed differently
 
     ## Bond length extraction
-    extract_parser = subparsers.add_parser('extract', help='Extract and cache bond length distribution data for a polymer project')
-    extract_parser.add_argument(
+    parser_extract = subparsers.add_parser(
+        'extract',
+        help='Extract and cache bond length distribution data for a polymer project',
+    )
+    parser_extract.add_argument(
         '-path',
         '--project-path',
         type=Path,
         default=Path.cwd(),
         help='Path to the directory in which the (presumed initialized) Signac project statepoints reside',
     )
-    extract_parser.add_argument(
+    parser_extract.add_argument(
         '-od',
         '--output-dir',
         type=Path,
         default=None,
         help='Directory into which bond length data file should be saved (will default to project directory)'
     )
-    extract_parser.add_argument(
+    parser_extract.add_argument(
         '-on',
         '--output-name',
         type=Path,
         default=DEFAULT_DATAFILE_NAME,
         help='Name of the file which bond length data will be written to (must be an HDF5 file!)'
     )
-    extract_parser.add_argument(
+    parser_extract.add_argument(
         '-take',
         '--take-first-n',
         type=int,
@@ -194,28 +197,31 @@ if __name__ == '__main__':
     )
 
     ## Bond length plotting 
-    plot_parser = subparsers.add_parser('plot', help='Plot bond length distribution from cached data file')
-    plot_parser.add_argument(
+    parser_plot = subparsers.add_parser(
+        'plot',
+        help='Plot bond length distribution from cached data file',
+    )
+    parser_plot.add_argument(
         '-dp',
         '--data-path',
         type=Path,
         default=assemble_path(Path.cwd(), f'{DEFAULT_DATAFILE_NAME}', extension='hdf5'),
     )
-    plot_parser.add_argument(
+    parser_plot.add_argument(
         '-od',
         '--output-dir',
         type=Path,
         default=Path.cwd(),
         help='Directory into which bond length distribution plots should be saved (will default to current working directory)'
     )
-    plot_parser.add_argument(
+    parser_plot.add_argument(
         '-on',
         '--output-name',
         type=Path,
         default='bond_length_distribution',
         help='Name of the file which bond length distribution plots will be saved as (will be saved as PNG files)'
     )
-    plot_parser.add_argument(
+    parser_plot.add_argument(
         '-binedg',
         '--bond-bin-edges',
         type=float,
@@ -223,7 +229,7 @@ if __name__ == '__main__':
         default=[0.9, 1.6],
         help='Bond lengths (in Angstrom) at which to split up the bond length distribution into separate subranges',
     )
-    plot_parser.add_argument(
+    parser_plot.add_argument(
         '-tpang',
         '--ticks-per-angstrom',
         type=int,
@@ -231,35 +237,35 @@ if __name__ == '__main__':
         default=[10, 25, 5],
         help='Number of ticks per Angstrom to render per plot on each respective binned subrange of bond lengths'
     )
-    plot_parser.add_argument(
+    parser_plot.add_argument(
         '-nrow',
         '--number-of-rows',
         type=int,
         default=1,
         help='Number of rows in which to arrange subplots',
     )
-    plot_parser.add_argument(
+    parser_plot.add_argument(
         '-s',
         '--scale',
         type=float,
         default=7.0,
         help='Scaling factor for figure size',
     )
-    plot_parser.add_argument(
+    parser_plot.add_argument(
         '-asp',
         '--aspect',
         type=float,
         default=1.2,
         help='Aspect ratio for figure size',
     )
-    plot_parser.add_argument(
+    parser_plot.add_argument(
         '-fs',
         '--fontsize',
         type=float,
         default=15.0,
         help='Font size for plot text elements',
     )
-    plot_parser.add_argument(
+    parser_plot.add_argument(
         '-exper',
         '--plot-experimental-bond-lengths',
         action='store_true',
