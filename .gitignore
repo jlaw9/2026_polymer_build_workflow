@@ -44,7 +44,7 @@ openmm_test/*
 
 polyid_*/*
 polyID_*/*
-permeability_pilot_set/*
+**/permeability_pilot_set*
 
 waterbox/water_20k*.*
 
