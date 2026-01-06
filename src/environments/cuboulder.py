@@ -1,7 +1,7 @@
 '''Custom ComputeEnvironment definitions for CU Boulder supercomputing'''
 
 __author__ = 'Timotej Bernat'
-__email__ = 'timtej.bernat@colorado.edu'
+__email__ = 'timotej.bernat@colorado.edu'
 
 from flow.environment import DefaultSlurmEnvironment, get_environment, _PartitionConfig
 
