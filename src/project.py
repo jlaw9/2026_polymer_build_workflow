@@ -910,6 +910,14 @@ def determine_periodic_box(job : Job) -> None:
         job.data.box_vectors_nm = melt_box_vectors.m_as(offunit.nanometer) # store just the array of vectors (no units) in nm
 
 
+## 4.5) Comolecule (mixture) packing
+# - Generate prototypes for all comolecules
+#    - Generate coords + partial charges
+#    - Cache to SDF
+# - Invoke Interchange packmol pack
+#     - Write to dedicated named SDF
+
+
 ## 5) OPENFF INTERCHANGE EXPORT
 to_interchange = PolymerBuildProject.make_group(name='to_interchange') 
 
