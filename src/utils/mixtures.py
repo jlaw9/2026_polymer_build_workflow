@@ -1,5 +1,8 @@
 '''For representing mixtures of molecules, and converting between common bases for amount of species'''
 
+__author__ = 'Timotej Bernat'
+__email__ = 'timotej.bernat@colorado.edu'
+
 from argparse import ArgumentParser, Namespace, Action
 
 from typing import Any, Hashable, Optional

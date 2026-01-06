@@ -1,5 +1,8 @@
 '''Configuration and contexts for job-to-file logging'''
 
+__author__ = 'Timotej Bernat'
+__email__ = 'timotej.bernat@colorado.edu'
+
 import logging
 LOGLEVELS_BY_NAME = logging.getLevelNamesMapping() # define once in header to avoid repreated calls
 

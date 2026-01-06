@@ -1,5 +1,8 @@
 '''For collating and storing bond length distribution data from a polymer build project'''
 
+__author__ = 'Timotej Bernat'
+__email__ = 'timotej.bernat@colorado.edu'
+
 from rich.progress import track
 from rich.logging import RichHandler
 

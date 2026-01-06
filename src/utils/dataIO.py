@@ -1,5 +1,8 @@
 '''For reading and writing monomer data files'''
 
+__author__ = 'Timotej Bernat'
+__email__ = 'timotej.bernat@colorado.edu'
+
 import logging
 from typing import Container, Iterable, Optional
 

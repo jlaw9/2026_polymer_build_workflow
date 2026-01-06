@@ -1,6 +1,9 @@
 '''For creating a clone of a PolymerBuildProject containin gonly those jobs which successfully produced LAMMPS files'''
 # TODO: expand this script to support passing in an arbitrary condition
 
+__author__ = 'Timotej Bernat'
+__email__ = 'timotej.bernat@colorado.edu'
+
 import logging
 logging.basicConfig(level=logging.INFO)
 

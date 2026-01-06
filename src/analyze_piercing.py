@@ -1,5 +1,8 @@
 '''For compiling data about ring piercing from a polymer structure build project'''
 
+__author__ = 'Timotej Bernat'
+__email__ = 'timotej.bernat@colorado.edu'
+
 from argparse import ArgumentParser
 from rich.progress import track
 

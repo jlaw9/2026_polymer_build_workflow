@@ -1,7 +1,7 @@
 '''For reading, writing, and representing polymer build job statespace parameters'''
 
 __author__ = 'Timotej Bernat'
-__email__ = 'timtej.bernat@colorado.edu'
+__email__ = 'timotej.bernat@colorado.edu'
 
 import logging
 LOGGER = logging.getLogger(__name__)

@@ -1,5 +1,8 @@
 '''For calculating numbers of admolecules in melts by fractions in any basis'''
 
+__author__ = 'Timotej Bernat'
+__email__ = 'timotej.bernat@colorado.edu'
+
 from logging import getLogger
 LOGGER = getLogger(__name__)
 

@@ -1,5 +1,8 @@
 '''Commonly-used project-level operation hooks for Signac Projects (https://docs.signac.io/en/latest/hooks.html)'''
 
+__author__ = 'Timotej Bernat'
+__email__ = 'timotej.bernat@colorado.edu'
+
 from typing import Callable, Optional
 import time
 

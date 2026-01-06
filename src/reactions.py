@@ -1,4 +1,7 @@
-'''Define and cache reaction templates for polymerization procedure'''
+'''Reaction templates and behavioral tests for polymerization of monomers'''
+
+__author__ = 'Timotej Bernat'
+__email__ = 'timotej.bernat@colorado.edu'
 
 import logging
 LOGGER = logging.getLogger(__name__)

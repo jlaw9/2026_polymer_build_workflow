@@ -1,4 +1,7 @@
-'''Initialize statepoint directories for PolyID Signac workflow'''
+'''Initialize project workspace directory from statepoints defined by build project config and chemical input dataset'''
+
+__author__ = 'Timotej Bernat'
+__email__ = 'timotej.bernat@colorado.edu'
 
 import logging
 from argparse import ArgumentParser, Namespace

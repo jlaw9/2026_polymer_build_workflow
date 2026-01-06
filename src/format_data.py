@@ -1,5 +1,8 @@
 '''For cleaning up and standardizing raw monomer input data files shipped from NREL'''
 
+__author__ = 'Timotej Bernat'
+__email__ = 'timotej.bernat@colorado.edu'
+
 # Logging
 import logging
 

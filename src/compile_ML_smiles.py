@@ -1,3 +1,8 @@
+'''For striiping out SMILES strings from assembled oligomers structures to use downstream for transfer learning'''
+
+__author__ = 'Timotej Bernat'
+__email__ = 'timotej.bernat@colorado.edu'
+
 from argparse import ArgumentParser
 from rich.progress import track
 

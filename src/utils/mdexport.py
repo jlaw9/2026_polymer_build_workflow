@@ -1,5 +1,8 @@
 '''Wrappers for exporting parameterized systems to MD file outputs'''
 
+__author__ = 'Timotej Bernat'
+__email__ = 'timotej.bernat@colorado.edu'
+
 from typing import Optional
 from pathlib import Path
 

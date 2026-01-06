@@ -1,7 +1,7 @@
-'''
-The structure of a polymer building project workflow,
-including a shared namespace, labels, conditions, and operations
-'''
+'''The structure of a polymer building project workflow, including a shared namespace, labels, conditions, and operations'''
+
+__author__ = 'Timotej Bernat'
+__email__ = 'timotej.bernat@colorado.edu'
 
 import logging
 import warnings
@@ -362,7 +362,7 @@ def has_too_many_monomers(job : Job) -> bool:
 
 @PolymerBuildProject.label
 def has_oversized_monomers(job : Job) -> bool:
-    '''Check whether it is known that monomers ARE too large'''
+    '''Check whether it is known that monomers are too large'''
     return monomer_sizes_validated(job) and job.doc['has_oversized_monomers']
 
 ### Sequential validation operations - cheapest done first
@@ -911,6 +911,8 @@ def determine_periodic_box(job : Job) -> None:
 
 
 ## 4.5) Comolecule (mixture) packing
+mix_in_comolecules = PolymerBuildProject.make_group(name='mix_in_comolecules')
+
 # - Generate prototypes for all comolecules
 #    - Generate coords + partial charges
 #    - Cache to SDF
