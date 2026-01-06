@@ -163,14 +163,30 @@ if __name__ == '__main__':
     )
     
     args = parser.parse_args()
-    args.output_dir.mkdir(parents=False, exist_ok=args.allow_overwrites)
+    
+    # Prepare output file for write
+    args.output_dir.mkdir(parents=False, exist_ok=True)
+
+    path_piercing_data = assemble_path(args.output_dir, args.name_datafile, extension='.csv')
+    validate_file_path(
+        path_piercing_data,
+        check_missing=False,
+        check_already_exists=not args.allow_overwrites,
+        valid_extensions=('.csv',),
+    )
+
+    path_plot = assemble_path(args.output_dir, args.name_plot, extension='.png')
+    validate_file_path(
+        path_plot,
+        check_missing=False,
+        check_already_exists=not args.allow_overwrites,
+        valid_extensions=('.png',),
+    )
 
     # Extract data
     project = PolymerBuildProject.get_project(args.project_path)
     ring_piercing_df = collate_project_ring_piercing_data(project)
     pierced_subset = ring_piercing_df[ring_piercing_df['found_pierced_rings']]
-    
-    path_piercing_data = assemble_path(args.output_dir, args.name_datafile, extension='.csv')
     pierced_subset.to_csv(path_piercing_data)
 
     # Plot bond length distribution
@@ -183,6 +199,5 @@ if __name__ == '__main__':
         fontsize=args.fontsize,
         n_bins=args.number_of_bins,
     )
-    path_plot = assemble_path(args.output_dir, args.name_plot, extension='.png')
     fig.savefig(path_plot, bbox_inches='tight')
     plt.close()

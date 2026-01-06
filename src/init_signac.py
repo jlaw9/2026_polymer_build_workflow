@@ -17,9 +17,6 @@ from signac import init_project
 from polymerist.genutils.iteration import cartesian_grid
 
 from . import _parent_dir
-from . import templates
-TEMPLATE_SOURCE_DIR = Path(templates.__path__[0])
-
 from .parameters import SystemParameters, PARAMS_SWEPT_PATH, standardize_params_swept
 from .utils.dataIO import validate_file_path, read_monomer_data
 
@@ -70,14 +67,6 @@ def generate_statepoints(args : Namespace) -> None:
     project_path = (args.output_dir / args.project_name).resolve()
     validate_file_path(project_path, check_already_exists=True)
     project = init_project(args.project_name)
-    
-    ## transfer SLURM submit script templates to project so scheduler knows how to submit jobs
-    template_dir_copied = copytree(
-        TEMPLATE_SOURCE_DIR,
-        project_path/TEMPLATE_SOURCE_DIR.stem,
-        dirs_exist_ok=True,
-    )
-    logging.info(f'Copied HPC submission scripts into {template_dir_copied}')
 
     ## populate data into statepoints
     for _, row in monomer_df.iterrows(): # N.B.: iterating over rows (rather than injecting into Cartesian product) since we DON'T want product along fields bundled within datafile records

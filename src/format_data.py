@@ -16,6 +16,7 @@ from pathlib import Path
 
 # Custom utils imports 
 from polymerist.genutils.textual.prettyprint import stringify_dict
+from polymerist.genutils.fileutils.pathutils import assemble_path
 from polymerist.smileslib.cleanup import expanded_SMILES
 
 from .utils.dataIO import validate_file_path, WRITER_FNS_BY_EXT, read_monomer_data
@@ -77,7 +78,12 @@ def format_merged(args : Namespace) -> None:
     "master" file with shared columns, and writes this to a single output file
     '''
     output_path = args.output_dir / args.output_file
-    validate_file_path(output_path, check_missing=False, check_already_exists=not args.allow_overwrites, valid_extensions=WRITER_FNS_BY_EXT)
+    validate_file_path(
+        output_path,
+        check_missing=False,
+        check_already_exists=not args.allow_overwrites,
+        valid_extensions=WRITER_FNS_BY_EXT,
+    )
 
     monomer_paths = sanitize_monomer_data_paths(args)
     monomer_dfs = read_monomer_data(monomer_paths)
@@ -118,8 +124,18 @@ def format_sequential(args : Namespace) -> None:
         logging.info('Determining output file names via the "postfix" directive')
         output_paths : list[Path] = []
         for input_path in monomer_paths:
-            output_path = args.output_dir / f'{input_path.stem}{"_" if args.postfix else ""}{args.postfix}{input_path.suffix}'
-            validate_file_path(output_path, check_missing=False, check_already_exists=not args.allow_overwrites, valid_extensions=WRITER_FNS_BY_EXT)
+            output_path = assemble_path(
+                args.output_dir,
+                input_path.stem,
+                extension=input_path.suffix,
+                postfix=args.postfix,
+            )
+            validate_file_path(
+                output_path,
+                check_missing=False,
+                check_already_exists=not args.allow_overwrites,
+                valid_extensions=WRITER_FNS_BY_EXT,
+            )
             output_paths.append(output_path)
 
     elif args.postfix is None: 
@@ -132,8 +148,17 @@ def format_sequential(args : Namespace) -> None:
         
         output_paths : list[Path] = []
         for output_name, input_path in zip(args.new_names, monomer_paths):
-            output_path = args.output_dir / f'{output_name}{input_path.suffix}'
-            validate_file_path(output_path, check_missing=False, check_already_exists=not args.allow_overwrites, valid_extensions=WRITER_FNS_BY_EXT)
+            output_path = assemble_path(
+                args.output_dir,
+                output_name,
+                extension=input_path.suffix,
+            )
+            validate_file_path(
+                output_path,
+                check_missing=False,
+                check_already_exists=not args.allow_overwrites,
+                valid_extensions=WRITER_FNS_BY_EXT,
+            )
             output_paths.append(output_path)
 
     # read, reformat, and write out data

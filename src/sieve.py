@@ -36,7 +36,7 @@ def main() -> None:
     parser = ArgumentParser()
     parser.add_argument(
         '-proj',
-        '--project_path',
+        '--project-path',
         type=Path,
         required=True,
         help='The path to the pre-existing project from which jobs should be drawn',
@@ -49,7 +49,7 @@ def main() -> None:
     )
     parser.add_argument(
         '-aow',
-        '--allow_overwrites',
+        '--allow-overwrites',
         action='store_true',
         help='Whether to permit creation of a new project on top of one which already exists'
     )

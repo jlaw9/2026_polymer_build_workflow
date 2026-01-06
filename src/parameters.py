@@ -19,6 +19,7 @@ from polymerist.genutils.fileutils.jsonio.jsonify import make_jsonifiable
 from polymerist.genutils.fileutils.jsonio.serialize import JSONSerializable
 # from polymerist.mdtools.openfftools.partialcharge.molchargers import MolCharger
 
+from .utils.dataIO import validate_file_path
 from .utils.mixtures import MixtureSpec, MixtureSpecSerializer, ParseMixtureSpec
 from . import _parent_dir
 
@@ -196,8 +197,15 @@ if __name__ == '__main__':
     if args.subparser == 'write':
         ## assemble output path
         args.output_dir.mkdir(parents=False, exist_ok=True)
-        path_config = assemble_path(args.output_dir, args.name_datafile, extension='.json')
-        if (not args.allow_overwrites) and path_config.exists():
-            raise FileExistsError(f'Attempted to overwrite extant file {path_config!s}')
-
+        path_config = assemble_path(
+            args.output_dir,
+            args.name_datafile,
+            extension='.json',
+        )
+        validate_file_path(
+            path_config,
+            check_missing=False,
+            check_already_exists=not args.allow_overwrites,
+            valid_extensions=('.json',)
+        )
         write_params_json(path_config, **vars(args))

@@ -5,7 +5,10 @@ from pathlib import Path
 import pandas as pd
 
 from rdkit import Chem
+
 from polymerist.genutils.fileutils.pathutils import assemble_path
+
+from .uitls.dataIO import validate_file_path
 from .project import PolymerBuildProject # my custom tooling for this project
 
 
@@ -63,11 +66,19 @@ if __name__ == '__main__':
         default='oligomer_SMILES_for_ML',
     )
     args = parser.parse_args()
-    args.output_dir.mkdir(parents=False, exist_ok=args.allow_overwrites)
+
+    # Prepare output file for write
+    args.output_dir.mkdir(parents=False, exist_ok=True)
+    path_smiles = assemble_path(args.output_dir, args.name_datafile, extension='.csv')
+    validate_file_path(
+        path_smiles,
+        check_missing=False,
+        check_already_exists=not args.allow_overwrites,
+        valid_extensions=('.csv',),
+    )
 
     # Compile and write SMILES data
     project = PolymerBuildProject.get_project(args.project_path)
     smiles_df = compile_oligomer_SMILES_data(project)
     
-    path_smiles = assemble_path(args.output_dir, args.name_datafile, extension='.csv')
     smiles_df.to_csv(path_smiles, index=False)
