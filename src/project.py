@@ -994,11 +994,11 @@ def solvated_melt_packed(job : Job) -> bool:
 ) # DEV: walltime will depend on how many comolecules we have; will leave some wiggle room for now
 def prototype_comolecules(job : Job) -> None:
     '''Generate reference molecules (with conformers and atomic partial charges) for each distinct comolecule to-be-solvated into the melt'''
-    with redirect_job_to_logfile(job) as logger:
-        charger = load_job_molcharger(job)
-        comol_top = Topology()
+    charger = load_job_molcharger(job)
+    comol_top = Topology()
+    n_comols : int = len(job.sp.mixture_spec)
 
-        n_comols : int = len(job.sp.mixture_spec)
+    with redirect_job_to_logfile(job) as logger:
         for i, (comol_smiles, number_comols) in enumerate(job.sp.mixture_spec.items(), start=1):
             logger.info(f'Generating comolecule prototype {i}/{n_comols} with SMILES "{comol_smiles}"')
             comol_offmol : Molecule = Molecule.from_rdkit(
@@ -1015,7 +1015,7 @@ def prototype_comolecules(job : Job) -> None:
             comol_charged_offmol = charger.charge_molecule(comol_offmol) # TODO: add special case for TIP3P water
             
             comol_top.add_molecule(comol_charged_offmol)
-            job.doc['comolecules_prototyped']['comol_smiles'] = True # mark as prototyped
+            job.doc['comolecules_prototyped'][comol_smiles] = True # mark as prototyped
 
         try:
             topology.topology_to_sdf(job.fn(PolymerBuildProject.COMOLECULE_SDF), comol_top)
@@ -1094,7 +1094,7 @@ def interchange_stereo_inconsistent(job : Job) -> bool:
 def melt_to_interchange(job : Job) -> None:
     '''Create Interchange from final melt (w/ appropriate FF parameters and cutoffs) and pickle for reuse'''
     charged_offmol = load_job_oligomer_molecule(job) # need charged molecule for reference to avoid expensive AM1-BCC default
-    comol_offtop = load_job_comol_prototypes_topology(job)
+    comol_offtop = load_job_comol_prototypes_topology(job) or Topology() # handle no-solvent case gracefully during unpacking later
     melt_offtop = load_job_melt_topology(job) # TODO: adjust depending on whether comolecules are present
 
     with redirect_job_to_logfile(job) as logger:
@@ -1382,7 +1382,7 @@ def main() -> None:
     PolymerBuildProject.SANITIZE_OPS = SanitizeFlags.names[start_args.sanitization_operations]   # will raise KeyError on invalid flag names
     PolymerBuildProject.AROMATICITY_MODEL = AromaticityModel.names[start_args.aromaticity_model] # will raise KeyError on invalid flag names
 
-    PolymerBuildProject.REGISTERED_RXNS = {} # initialize predefined reactions
+    PolymerBuildProject.REGISTERED_RXNS = {}
     for rxnname, rxn_smarts in read_rxn_mapping_data(start_args.rxn_mapping_path).items():
         rxn = AnnotatedReaction.from_smarts(rxn_smarts)
         rxn.Initialize()
@@ -1405,7 +1405,7 @@ def main() -> None:
     new_project = project_hooks.install_hooks(new_project)
 
     # mock remaining Signac args for parser and run Project's shell interface
-    sys.argv[1:] = signac_args # NOTE: this is an ugly hack to allow this script to take CLI args while not disturbing Signacs tastes for arguments
+    sys.argv[1:] = signac_args # NOTE: this is an ugly hack to allow this script to take CLI args while not disturbing Signac's taste for arguments
     new_project.main()
 
 if __name__ == '__main__':
