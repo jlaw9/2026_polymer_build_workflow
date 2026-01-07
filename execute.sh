@@ -3,6 +3,7 @@
 projdir="${1:-"polyID_test"}"
 batchsize="${2:-6}"
 logfile="${3:-${projdir}_build.out}"
+rxndir="${4:-src/reactions/rxns_polyID.json}"
 
 # Get current status of project
 # python -m src.project -path $projdir status --detailed --pretty
@@ -11,6 +12,7 @@ logfile="${3:-${projdir}_build.out}"
 # python -m src.project -path $projdir submit --parallel --partition blanca-shirts -o everything --job-output dumps.out # --pretend # Shirts Blanca nodes
 python -m src.project \
     -path $projdir \
+    -rxns $rxndir \
     submit --parallel \
     --bundle $batchsize \
     --operation everything \
