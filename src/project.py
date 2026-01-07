@@ -98,22 +98,39 @@ from polymerist.rdutils.reactions.fragment import CutMinimumCostBondsStrategy
 
 from polymerist.smileslib.cleanup import expanded_SMILES
 
-# Utils imports
-from .utils.logs import redirect_to_logfile
-from .utils.dataIO import read_rxn_mapping_data
-from .utils.offlib import elem_counts
-from .utils.packing import generate_uniform_subpopulated_lattice
-from .utils.mdexport import interchange_to_openmm
-from .utils.jobhooks import ProjectHooks
+logging.warning(f'Working in directory: {Path.cwd()}')
 
-from .reactions import RXNS_DIR
-from .environments.cuboulder import CUAlpineEnvironment, CUBlancaShirtsEnvironment # inject CURC-specific environment config
+
+# Local utils imports
+try:
+    from .utils.logs import redirect_to_logfile
+    from .utils.dataIO import read_rxn_mapping_data
+    from .utils.offlib import elem_counts
+    from .utils.packing import generate_uniform_subpopulated_lattice
+    from .utils.mdexport import interchange_to_openmm
+    from .utils.jobhooks import ProjectHooks
+
+    from .reactions import RXNS_DIR
+    from .environments.cuboulder import CUAlpineEnvironment, CUBlancaShirtsEnvironment # inject CURC-specific environment config
+except ImportError:
+    # N.B.: as ugly as this is, it's necessary for cluster submission;
+    # the procedurally-generated scheduler scripts ALWAYS calls this script
+    # as "python src/project.py" (not "python -m src.project" as I'd have liked)
+    from utils.logs import redirect_to_logfile
+    from utils.dataIO import read_rxn_mapping_data
+    from utils.offlib import elem_counts
+    from utils.packing import generate_uniform_subpopulated_lattice
+    from utils.mdexport import interchange_to_openmm
+    from utils.jobhooks import ProjectHooks
+
+    from reactions import RXNS_DIR
+    from environments.cuboulder import CUAlpineEnvironment, CUBlancaShirtsEnvironment # inject CURC-specific environment config
 
 
 # DEFINING THE SIGNAC PROJECT CLASS PROPER 
 class PolymerBuildProject(FlowProject):
     '''Project for automated high-throughput generation of polymer structure and MD inputs from chemical data'''
-    # GLOBAL CONFIG - TODO: make these configuratble via argparse to the containing script; move to separate parameters dataclass?
+    # GLOBAL CONFIG
     ## LOGGING AND REPORTING FORMATS
     QUANTITY_PRECISION  : ClassVar[int] = 4 # number of decimal places to report Quantities when logging
     LOGLEVEL            : ClassVar[int] = logging.INFO
