@@ -19,7 +19,6 @@ from signac import init_project
 
 from polymerist.genutils.iteration import cartesian_grid
 
-from . import _parent_dir
 from .parameters import SystemParameters, PARAMS_SWEPT_PATH, standardize_params_swept
 from .utils.dataIO import validate_file_path, read_monomer_data
 
@@ -132,7 +131,7 @@ def main() -> None:
         '-od',
         '--output-dir',
         type=Path,
-        default=_parent_dir,
+        default=Path.cwd(),
         help='The directory inside which the Signac project should be initialized'
     )
 
