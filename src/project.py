@@ -99,8 +99,6 @@ from polymerist.rdutils.reactions.fragment import CutMinimumCostBondsStrategy
 
 from polymerist.smileslib.cleanup import expanded_SMILES
 
-logging.warning(f'Working in directory: {Path.cwd()}')
-
 
 # Local utils imports
 try:
