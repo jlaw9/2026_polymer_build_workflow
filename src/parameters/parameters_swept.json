@@ -12,8 +12,10 @@
     "mixture_spec": [
         {}
     ],
-    "forcefield": [
-        "openff_unconstrained-2.0.0.offxml"
+    "forcefields": [
+        [
+            "openff_unconstrained-2.0.0.offxml"
+        ]
     ],
     "minimize_oligomer": [
         true
