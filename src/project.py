@@ -290,8 +290,27 @@ def load_job_topology(job : Job, sdf_pathname : str, *start_args, **kwargs) -> O
             logger.error('Empty or malformed SDF file, could not read structural data')
             return None
 
+def load_job_oligomer_rdmol(job : Job) -> Optional[Chem.Mol]:
+    '''Load the cached RDKit Mol of the olgiomer structure, if it has been generated'''
+    try:
+        with Chem.SDMolSupplier(
+            job.fn(PolymerBuildProject.OLIGOMER_SDF),
+            sanitize=False,
+            removeHs=False
+        ) as suppl:
+            oligomer = suppl[0]
+            sanitize_mol(
+                oligomer,
+                sanitize_ops=PolymerBuildProject.SANITIZE_OPS,
+                aromaticity_model=PolymerBuildProject.AROMATICITY_MODEL,
+                in_place=True,
+            )
+            return oligomer
+    except OSError:
+        return None
+
 def load_job_oligomer_molecule(job : Job) -> Optional[Molecule]:
-    '''Check whether a topology has atomic partial charges assigned to it'''
+    '''Load the cached OpenFF Molecule of the olgiomer structure, if it has been generated'''
     oligomer_top = load_job_topology(
         job,
         PolymerBuildProject.OLIGOMER_SDF,
