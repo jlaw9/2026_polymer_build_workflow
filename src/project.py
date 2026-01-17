@@ -252,6 +252,16 @@ def has_nonempty_file(job : Job, filename : str) -> bool:
     '''Check if a job contains a particular file which contains a nonzero amount of information'''
     return job.isfile(filename) and not is_empty(job.fn(filename))
 
+def load_job_forcefield(job : Job, deregister_am1bcc : bool=False) -> Optional[ForceField]:
+    '''Load the combined forcefield defined by the names (or paths) specified by the jobs "forcefields" field'''
+    try: # TODO: worth checking explicitly that the file exists/sanitizing missing .offxml etc.?
+        forcefield = ForceField(*job.sp.forcefields)
+        if deregister_am1bcc and ('ToolkitAM1BCC' in forcefield.registered_parameter_handlers):
+            forcefield.deregister_parameter_handler('ToolkitAM1BCC') # forcibly remove AM1BCC handler so a failed isomorphism doesn't result in prohibitively-long AM1BCC calculation
+        return forcefield
+    except OSError as error: # TODO: make error handling more specific and informative, left suggestive of common OSError for now
+        return None
+
 def load_job_rdmol(job : Job, separate_mols : bool=True) -> Chem.Mol:
     '''Loading RDKit molecule(s) from the SMILES in a job's statepoint'''
     return PolymerBuildProject.sanitized_mol_from_smiles(job.sp.smiles_explicit, separate_mols=separate_mols)
@@ -1029,7 +1039,7 @@ def prototype_comolecules(job : Job) -> None:
             comol_offmol.generate_conformers(n_conformers=1)
             comol_offmol.properties[PolymerBuildProject.COMOLECULE_NUMBER_PROPNAME] = number_comols
             comol_offmol.properties[PolymerBuildProject.COMOLECULE_SMILES_PROPNAME] = comol_smiles
-            comol_charged_offmol = charger.charge_molecule(comol_offmol) # TODO: add special case for TIP3P water
+            comol_charged_offmol = charger.charge_molecule(comol_offmol) # TODO: add special case for TIP3P water - DEV: might want to omit, forcing reliance on library charges?
             
             comol_top.add_molecule(comol_charged_offmol)
             job.doc['comolecules_prototyped'][comol_smiles] = True # mark as prototyped
@@ -1081,11 +1091,7 @@ to_interchange = PolymerBuildProject.make_group(name='to_interchange')
 @PolymerBuildProject.label
 def forcefield_is_valid(job : Job) -> bool:
     '''Check that the force field specified is a valid and loadable OpenFF forcefield file installed in the current environment'''
-    try: # TODO: worth checking explicitly that the file exists/sanitizing missing .offxml etc.?
-        ForceField(job.sp.forcefield) # NOTE: need to handle exception when the offxml provided doesn't exist
-        return True
-    except OSError as error: # TODO: make error handling more specific and informative, left suggestive of common OSError for now
-        return False
+    return (load_job_forcefield(job) is not None)
     
 @PolymerBuildProject.label
 def has_interchange(job : Job) -> bool:
@@ -1127,10 +1133,8 @@ def melt_to_interchange(job : Job) -> None:
             switch_width = 0.0*offunit.nanometer
             logger.warning('Disabling switching function for nonbonded forces')
 
-        logger.info(f'Obtaining force field parameters from OpenFF "{job.sp.forcefield}"')
-        forcefield = ForceField(job.sp.forcefield) # NOTE: need to handle exception when the offxml provided doesn't exist
-        if 'ToolkitAM1BCC' in forcefield.registered_parameter_handlers:
-            forcefield.deregister_parameter_handler('ToolkitAM1BCC') # forcibly remove AM1BCC handler so a fail siomorphism doesn't result in prohibitively-long AM1BCC calculation
+        logger.info(f'Obtaining force field parameters from SMIRNOFF forcefield(s): {job.sp.forcefields!s}"')
+        forcefield = load_job_forcefield(job, deregister_am1bcc=True) # NOTE: need to handle exception when the offxml provided doesn't exist
 
         try:
             logger.info('Initializing OpenFF Interchange from melt topology and force field')
