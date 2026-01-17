@@ -1,4 +1,4 @@
-'''For striiping out SMILES strings from assembled oligomers structures to use downstream for transfer learning'''
+'''For stripping out SMILES strings from assembled oligomers structures to use downstream for transfer learning'''
 
 __author__ = 'Timotej Bernat'
 __email__ = 'timotej.bernat@colorado.edu'
@@ -13,7 +13,7 @@ from rdkit import Chem
 
 from polymerist.genutils.fileutils.pathutils import assemble_path
 
-from .uitls.dataIO import validate_file_path
+from .utils.dataIO import validate_file_path
 from .project import PolymerBuildProject # my custom tooling for this project
 
 
