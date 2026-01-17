@@ -42,7 +42,8 @@ class SystemParameters:
     pcharge_method : str = 'Espaloma-AM1-BCC' # 'NAGL'
     mixture_spec   : MixtureSpec = field(default_factory=MixtureSpec)
     # NOTE: parameters below generally shouldn't be swept through, and sensible defaults are provided for all
-    forcefield              : str   = 'openff_unconstrained-2.0.0.offxml' # 'openff-2.0.0.offxml'
+    forcefields             : list = field(default_factory=lambda : ['openff_unconstrained-2.0.0.offxml']) # 'openff-2.0.0.offxml'
+    # DEV: more accurate typehint of list[str] breaks isinstance check against field.type, since it is a generic, not a builtin type
     minimize_oligomer       : bool  = True
     use_switching_function  : bool  = False
     switch_width_nm         : float = 0.1
@@ -52,7 +53,7 @@ class SystemParameters:
 def standardize_params_swept(json_dict : dict[str, JSONSerializable]) -> Mapping[str, list[Hashable]]:
     '''Read and format a JSON-serialized parameter statespace into a
     mapping from SystemParameter fields to sets of swept parameter values'''
-    params_swept : dict[str, set[Any]] = dict()
+    params_swept : dict[str, list[Any]] = dict()
     for field_ in fields(SystemParameters): # underscore to avoid confusion with dataclasses.field
         values = json_dict[field_.name] # don't use dict.get(); want a big, loud KeyError if no values for that field are provided
         if not isinstance(values, list): # reasonable assumption IFF json_dict comes directly from a JSON file
@@ -136,11 +137,11 @@ if __name__ == '__main__':
         help='Method to use for assigning atomic partial charges to molecules',
     )
     parser_write.add_argument(
-        '-ff',
-        '--forcefield',
-        type=str,
-        nargs='+',
-        default='openff_unconstrained-2.0.0.offxml',
+        '-ffs',
+        '--forcefields',
+        type=json.loads, # enables parsing lists OF lists
+        # nargs='+',
+        default=[['openff_unconstrained-2.0.0.offxml']], # needs to be list of lists to be properly swept through
         # default='openff-2.0.0.offxml',
         help='Name of OpenFF ForceField to use when parameterizing molecules',
     )
@@ -153,14 +154,14 @@ if __name__ == '__main__':
         action=ParseMixtureSpec, # bespoke processing of mixture dict
     )
     parser_write.add_argument(
-        '-nemin',
+        '-no-emin',
         '--dont-minimize-oligomer',
         dest='minimize_oligomer', # needed to alias to 
         action='store_false', # True by default
         help='Whether to perform UFF energy minimization after generating prototype oligomer conformer'
     )
     parser_write.add_argument(
-        '-usf',
+        '-use-sf',
         '--use_switching_function',
         action='store_true',
         help='Whether to use a switching function to smooth the non-bonded cutoff'  \
