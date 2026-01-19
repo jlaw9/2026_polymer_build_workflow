@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<SMIRNOFF version="0.3" aromaticity_model="OEAroModel_MDL">
+    <vdW version="0.4" potential="Lennard-Jones-12-6" combining_rules="Lorentz-Berthelot" scale12="0.0" scale13="0.0" scale14="0.5" scale15="1.0" cutoff="9.0 * angstrom ** 1" switch_width="1.0 * angstrom ** 1" periodic_method="cutoff" nonperiodic_method="no-cutoff">
+      <Atom smirks="[#8X1:1]=[#8X1]" epsilon="0.4380648 * kilojoule_per_mole ** 1" id="O=O" sigma="0.3297 * nanometer ** 1"></Atom>
+      <Atom smirks="[#7X1:1]#[#7X1]" epsilon="0.3334648 * kilojoule_per_mole ** 1" id="N#N" sigma="0.3614 * nanometer ** 1"></Atom>
+      <Atom smirks="[#1X1:1]-[#1X1]" epsilon="0.0640152 * kilojoule_per_mole ** 1" id="H-H" sigma="0.2918 * nanometer ** 1"></Atom>
+    </vdW>
+    <LibraryCharges version="0.3">
+      <LibraryCharge smirks="[#8X1:1]=[#8X1]" charge1="0.0 * elementary_charge ** 1" id="O=O"></LibraryCharge>
+      <LibraryCharge smirks="[#7X1:1]#[#7X1]" charge1="0.0 * elementary_charge ** 1" id="N#N"></LibraryCharge>      
+      <LibraryCharge smirks="[#1X1:1]-[#1X1]" charge1="0.0 * elementary_charge ** 1" id="H-H"></LibraryCharge>      
+    </LibraryCharges>
+    <Electrostatics version="0.4" scale12="0.0" scale13="0.0" scale14="0.8333333333" scale15="1.0" cutoff="9.0 * angstrom ** 1" switch_width="0.0 * angstrom ** 1" periodic_potential="Ewald3D-ConductingBoundary" nonperiodic_potential="Coulomb" exception_potential="Coulomb"></Electrostatics>
+<Bonds version="0.4" potential="harmonic" fractional_bondorder_method="AM1-Wiberg" fractional_bondorder_interpolation="linear">
+  <Bond smirks="[#8X1:1]=[#8X1:2]" id="b1" length="1.2074 * angstrom ** 1" k="1640.4 * kilocalorie_per_mole ** 1 * angstrom ** -2"></Bond>
+  <Bond smirks="[#7X1:1]#[#7X1:2]" id="b1" length="1.0977 * angstrom ** 1" k="3180.0 * kilocalorie_per_mole ** 1 * angstrom ** -2"></Bond>
+  <Bond smirks="[#1X1:1]-[#1X1:2]" id="b1" length="0.7414 * angstrom ** 1" k="700.0 * kilocalorie_per_mole ** 1 * angstrom ** -2"></Bond>
+</Bonds>
+</SMIRNOFF>
+<!-- https://pubs.acs.org/doi/10.1021/acs.jctc.0c01132   -->
