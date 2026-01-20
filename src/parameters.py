@@ -115,7 +115,7 @@ if __name__ == '__main__':
         help='Degree(s) of polymerization of oligomer chemistries',
     )
     parser_write.add_argument(
-        '-namax',
+        '-natmmax',
         '--n-atoms-max',
         type=int,
         nargs='+',
