@@ -43,6 +43,7 @@ from openmm.unit import femtosecond, picosecond, kelvin, kilojoule_per_mole
 from openff.toolkit import Molecule, Topology, ForceField
 from openff.toolkit.utils.exceptions import (
     MoleculeParseError,
+    SMIRNOFFParseError,
     UnassignedChemistryInPDBError,
     IncorrectNumConformersWarning,
     InconsistentStereochemistryError,
@@ -102,11 +103,13 @@ from polymerist.smileslib.cleanup import expanded_SMILES
 
 # Local utils imports
 try:
+    from . import FF_DIR
     from .utils.logs import redirect_to_logfile
     from .utils.dataIO import read_rxn_mapping_data
     from .utils.offlib import elem_counts
     from .utils.packing import generate_uniform_subpopulated_lattice
     from .utils.mdexport import interchange_to_openmm
+    from .utils.forcefields import load_composite_forcefield
     from .utils.jobhooks import ProjectHooks
 
     from .reactions import RXNS_DIR
@@ -115,11 +118,13 @@ except ImportError:
     # N.B.: as ugly as this is, it's necessary for cluster submission;
     # the procedurally-generated scheduler scripts ALWAYS calls this script
     # as "python src/project.py" (not "python -m src.project" as I'd have liked)
+    from __init__ import FF_DIR
     from utils.logs import redirect_to_logfile
     from utils.dataIO import read_rxn_mapping_data
     from utils.offlib import elem_counts
     from utils.packing import generate_uniform_subpopulated_lattice
     from utils.mdexport import interchange_to_openmm
+    from utils.forcefields import load_composite_forcefield
     from utils.jobhooks import ProjectHooks
 
     from reactions import RXNS_DIR
@@ -255,11 +260,12 @@ def has_nonempty_file(job : Job, filename : str) -> bool:
 def load_job_forcefield(job : Job, deregister_am1bcc : bool=False) -> Optional[ForceField]:
     '''Load the combined forcefield defined by the names (or paths) specified by the jobs "forcefields" field'''
     try: # TODO: worth checking explicitly that the file exists/sanitizing missing .offxml etc.?
-        forcefield = ForceField(*job.sp.forcefields)
-        if deregister_am1bcc and ('ToolkitAM1BCC' in forcefield.registered_parameter_handlers):
-            forcefield.deregister_parameter_handler('ToolkitAM1BCC') # forcibly remove AM1BCC handler so a failed isomorphism doesn't result in prohibitively-long AM1BCC calculation
-        return forcefield
-    except OSError as error: # TODO: make error handling more specific and informative, left suggestive of common OSError for now
+        return load_composite_forcefield(
+            *job.sp.forcefields,
+            local_ff_dir=FF_DIR,
+            deregister_am1bcc=deregister_am1bcc
+        )
+    except (OSError, SMIRNOFFParseError) as error: # TODO: make error handling more specific and informative, left suggestive of common OSError for now
         return None
 
 def load_job_rdmol(job : Job, separate_mols : bool=True) -> Chem.Mol:
