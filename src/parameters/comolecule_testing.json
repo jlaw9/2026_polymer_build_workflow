@@ -21,7 +21,9 @@
     ],
     "forcefields": [
         [
-            "openff_unconstrained-2.0.0.offxml"
+            "openff_unconstrained-2.0.0.offxml",
+            "$FORCEFIELDS/diatomic_gases_IFF.offxml",
+            "$FORCEFIELDS/CO2_TRAPPE-flex.offxml"
         ]
     ],
     "minimize_oligomer": [
