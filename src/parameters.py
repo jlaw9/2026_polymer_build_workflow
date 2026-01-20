@@ -42,13 +42,13 @@ class SystemParameters:
     pcharge_method : str = 'Espaloma-AM1-BCC' # 'NAGL'
     mixture_spec   : MixtureSpec = field(default_factory=MixtureSpec)
     # NOTE: parameters below generally shouldn't be swept through, and sensible defaults are provided for all
-    forcefields             : list = field(default_factory=lambda : ['openff_unconstrained-2.0.0.offxml']) # 'openff-2.0.0.offxml'
+    forcefields : list = field(default_factory=lambda : ['openff_unconstrained-2.0.0.offxml']) # 'openff-2.0.0.offxml'
     # DEV: more accurate typehint of list[str] breaks isinstance check against field.type, since it is a generic, not a builtin type
-    minimize_oligomer       : bool  = True
-    use_switching_function  : bool  = False
-    switch_width_nm         : float = 0.1
-    nonbonded_cutoff_nm     : float = 0.9
-    box_padding_nm          : float = 0.0
+    minimize_oligomer      : bool  = True
+    use_switching_function : bool  = False
+    switch_width_nm        : float = 0.1
+    nonbonded_cutoff_nm    : float = 0.9
+    box_padding_nm         : float = 0.0
 
 def standardize_params_swept(json_dict : dict[str, JSONSerializable]) -> Mapping[str, list[Hashable]]:
     '''Read and format a JSON-serialized parameter statespace into a
