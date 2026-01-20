@@ -33,7 +33,7 @@ python -m src.reactions
 ## Parameters
 System size and force field parameters for each system build job are configured in [src.parameters](src/parameters.py), and are broken down into two types:
 * ParametersSwept: each of these fields is a range of values which will be iterated over in all combinations (i.e. in Cartesian product). These include:
-  *  Degree of polymerization (peroligomer)
+  *  Degree of polymerization (per oligomer)
   *  Max number of atoms (per box)
   *  Partial charge method
 * ParametersConfig: these are single parameters common to all jobs and are related to configuring MD parameters, including choice of Sage forcefield and nonbonded cutoffs.
@@ -42,6 +42,20 @@ Once you're satisfied with the parameters, initialize and cache them by running:
 ```sh
 python -m src.parameters
 ```
+
+### Forcefields
+This workflow current only supports [SMIRNOFF-style forcefields](https://docs.openforcefield.org/projects/toolkit/en/stable/users/smirnoff.html), as supported by the OpenFF toolkit. In principle, arbitrary common force fields (e.g. GAFF, CHARMM) can be employed, as long as one can provide a local SMIRNOFF port of the desired force field. Any locally-defined force fields should be placed in `src/forcefields/<your-ff-name>.offxml` to be recognized by the workflow; these can then be referenced in parameter files as `$FORCEFIELDS/<your-ff-name>.offxml`. Force fields without this prefix will be assumed to be shipped as flagship OpenFF forcefields, and will be searched for in any installed [`openforcefields`](https://github.com/openforcefield/openff-forcefields/tree/main/openforcefields) libraries.
+
+Choices of combined force fields can be injected into a build workflow via the `-ffs/--forcefields` keyword of the parameters write **as a JSON-parsable string of a list of lists**, like:
+To be correctly parsed, the argument following the `--forcefields` flag must be enclosed in *SINGLE QUOTES*, with each individual force field name enclosed in *DOUBLE QUOTES*. As an example, the following would be a valid argument:
+```sh
+python -m src.parameters write ... --forcefields '[["openff_unconstrained-2.0.0.offxml"], ["$FORCEFIELDS/diatomic_gases_IFF.offxml.offxml", "$FORCEFIELDS/CO2_TRAPPE-flex.offxml"]]'
+```
+Force fields grouped together by inner list will be combined into a single forcefield upon workflow run; these groups can be as small as a single force field, and will be treated as another state variable. E.g. in the example above, we define two force field groups,
+* one for the unconstrained Sage 2.0.0 force field (installed and searched for in `openforcefields`) 
+* one for a combination of diatomic gas and CO2 force fields, derived from IFF and TraPPE, respectively (searched for locally in `src/forcefields `)
+
+With this specification, all polymer build jobs will be incarnated in two copies; one with the Sage FF, and the other with the composite gas force field.
 
 ## Supplying monomer data
 Formatting for monomer data inputs is (by design) very tolerant, and requires only a handful of criteria to be met to use as the basis for a polymer project. Namely, a monomer data input file must consist of:
