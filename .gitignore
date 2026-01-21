@@ -58,3 +58,4 @@ out.lmp
 tmp.in
 *.out
 *.log
+*.tar.gz
