@@ -10,8 +10,8 @@ from pathlib import Path
 import pandas as pd
 
 from rdkit import Chem
-
 from polymerist.genutils.fileutils.pathutils import assemble_path
+from .project import PolymerBuildProject # my custom tooling for this project
 
 from .utils.dataIO import validate_file_path
 from .project import PolymerBuildProject # my custom tooling for this project
