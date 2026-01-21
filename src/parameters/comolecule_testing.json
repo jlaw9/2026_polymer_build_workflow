@@ -1,0 +1,44 @@
+{
+    "DOP": [
+        3,
+        5
+    ],
+    "n_atoms_max": [
+        1000
+    ],
+    "pcharge_method": [
+        "Espaloma-AM1-BCC"
+    ],
+    "mixture_spec": [
+        {},
+        {
+            "O=O": 50
+        },
+        {
+            "C" : 100,
+            "O=C=O": 50
+        }
+    ],
+    "forcefields": [
+        [
+            "openff_unconstrained-2.0.0.offxml",
+            "$FORCEFIELDS/diatomic_gases_IFF.offxml",
+            "$FORCEFIELDS/CO2_TRAPPE-flex.offxml"
+        ]
+    ],
+    "minimize_oligomer": [
+        true
+    ],
+    "use_switching_function": [
+        false
+    ],
+    "switch_width_nm": [
+        0.1
+    ],
+    "nonbonded_cutoff_nm": [
+        0.9
+    ],
+    "box_padding_nm": [
+        0.0
+    ]
+}

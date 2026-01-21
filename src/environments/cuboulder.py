@@ -1,14 +1,17 @@
 '''Custom ComputeEnvironment definitions for CU Boulder supercomputing'''
 
 __author__ = 'Timotej Bernat'
-__email__ = 'timtej.bernat@colorado.edu'
+__email__ = 'timotej.bernat@colorado.edu'
 
 from flow.environment import DefaultSlurmEnvironment, get_environment, _PartitionConfig
 
 
+CPU_NODE_PATTERN : str = r'c\d+cpu-c\d+-u\d+-\d+.*' # DEV: have to do this ugliness because some brainiac at CURC decided to mask the domain on interactive and compute nodes
+CU_DOMAIN_NAME : str = r'.*\.rc(\.int)?\.colorado\.edu$'
+
 class CURCEnvironment(DefaultSlurmEnvironment):
     '''Environment boilerplate common to University of Colorado Boulder Research Computing clusters'''
-    hostname_pattern = r'.*\.rc(\.int)?\.colorado\.edu$' # also works on interactive nodes
+    hostname_pattern = CU_DOMAIN_NAME # also works on interactive nodes
     template = 'curc.sh'
 
     @classmethod
@@ -63,7 +66,7 @@ class CUAlpineEnvironment(CURCEnvironment):
     Environment for the University of Colorado Boulder Alpine cluster
     https://curc.readthedocs.io/en/latest/clusters/alpine/alpine-hardware.html
     '''
-    hostname_pattern = r'[^b].*\.rc(\.int)?\.colorado\.edu$' # overtly DOESN'T start with "b", also works on interactive nodes
+    hostname_pattern = rf'({CPU_NODE_PATTERN})|([^b]{CU_DOMAIN_NAME})' # domain name overtly DOESN'T start with "b"
     template = 'alpine.sh'
 
     # partition
@@ -126,7 +129,7 @@ class CUBlancaShirtsEnvironment(CURCEnvironment):
     Environment for the Shirts Research Group's allocation on the University of Colorado Boulder Blanca condo cluster
     https://curc.readthedocs.io/en/latest/clusters/blanca/blanca.html
     '''
-    hostname_pattern = r'b.*\.rc(\.int)?\.colorado\.edu$' # starts with "b" also works on interactive nodes
+    hostname_pattern = rf'b{CU_DOMAIN_NAME}' # starts with "b" also works on interactive nodes
     template = 'blanca.sh'
 
     @classmethod
@@ -153,6 +156,7 @@ class CUBlancaShirtsEnvironment(CURCEnvironment):
 test_hostnames = [
     'login13.rc.colorado.edu',              # Alpine login node
     'c3cpu-c15-u32-3.rc.int.colorado.edu',  # Ainteractive
+    'c3cpu-c15-u1-1',                       # Alpine OnDemand
     'bgpu-shirts3.rc.int.colorado.edu',     # Blanca OnDemand
     'bgpu-shirts1.rc.int.colorado.edu',     # Blanca sbatch job
 ]

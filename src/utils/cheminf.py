@@ -1,5 +1,8 @@
 '''Cheminformatic and SMILES/SMARTS string-related functionality'''
 
+__author__ = 'Timotej Bernat'
+__email__ = 'timotej.bernat@colorado.edu'
+
 import logging
 from typing import Iterable, Optional, Sequence, Union
 

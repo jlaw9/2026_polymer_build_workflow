@@ -1,5 +1,8 @@
 '''Wrappers for exporting parameterized systems to MD file outputs'''
 
+__author__ = 'Timotej Bernat'
+__email__ = 'timotej.bernat@colorado.edu'
+
 from typing import Optional
 from pathlib import Path
 
@@ -13,14 +16,14 @@ from polymerist.mdtools.openmmtools.forces import impose_unique_force_groups
 
 
 def interchange_to_openmm(
-        interchange : Interchange,
-        integrator : Integrator,
-        omm_top_path : Path,
-        omm_sys_path : Path,
-        omm_state_path : Path,
-        omm_integ_path : Path,
-        state_params : Optional[dict[str, bool]]=None
-    ) -> Context:
+    interchange : Interchange,
+    integrator : Integrator,
+    omm_top_path : Path,
+    omm_sys_path : Path,
+    omm_state_path : Path,
+    omm_integ_path : Path,
+    state_params : Optional[dict[str, bool]]=None
+) -> Context:
     '''Produce OpenMM System and State .xml files from an OpenFF Interchange'''
     # sanitizing inputs
     if isinstance(omm_top_path, str):

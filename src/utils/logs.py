@@ -1,5 +1,8 @@
 '''Configuration and contexts for job-to-file logging'''
 
+__author__ = 'Timotej Bernat'
+__email__ = 'timotej.bernat@colorado.edu'
+
 import logging
 LOGLEVELS_BY_NAME = logging.getLevelNamesMapping() # define once in header to avoid repreated calls
 
@@ -20,13 +23,13 @@ def format_error_for_log(error : Exception) -> str:
 
 # FILE LOGGING
 def create_file_logger(
-        logfile_path : Union[str, Path],
-        logger_name : str,
-        level : int=logging.INFO,
-        mode : str='a',
-        formatter : logging.Formatter=LOG_FORMATTER,
-        suppress_console_logs : bool=True,
-    ) -> tuple[logging.Logger, logging.FileHandler]:
+    logfile_path : Union[str, Path],
+    logger_name : str,
+    level : int=logging.INFO,
+    mode : str='a',
+    formatter : logging.Formatter=LOG_FORMATTER,
+    suppress_console_logs : bool=True,
+) -> tuple[logging.Logger, logging.FileHandler]:
     '''Create a unique logger (bound to a file) for a Signac job'''
 
     # Create "mouthpiece" proxy logger which will handle log input

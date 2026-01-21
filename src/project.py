@@ -1,7 +1,7 @@
-'''
-The structure of a polymer building project workflow,
-including a shared namespace, labels, conditions, and operations
-'''
+'''The structure of a polymer building project workflow, including a shared namespace, labels, conditions, and operations'''
+
+__author__ = 'Timotej Bernat'
+__email__ = 'timotej.bernat@colorado.edu'
 
 import logging
 import warnings
@@ -43,6 +43,7 @@ from openmm.unit import femtosecond, picosecond, kelvin, kilojoule_per_mole
 from openff.toolkit import Molecule, Topology, ForceField
 from openff.toolkit.utils.exceptions import (
     MoleculeParseError,
+    SMIRNOFFParseError,
     UnassignedChemistryInPDBError,
     IncorrectNumConformersWarning,
     InconsistentStereochemistryError,
@@ -64,6 +65,7 @@ from openff.units import (
     Quantity as OFFQuantity,
 )
 from openff.interchange import Interchange
+from openff.interchange.components import _packmol as packmol
 
 # Custom (polymerist)
 import polymerist as ps
@@ -98,22 +100,41 @@ from polymerist.rdutils.reactions.fragment import CutMinimumCostBondsStrategy
 
 from polymerist.smileslib.cleanup import expanded_SMILES
 
-# Utils imports
-from .utils.logs import redirect_to_logfile
-from .utils.dataIO import read_rxn_mapping_data
-from .utils.offlib import elem_counts
-from .utils.packing import generate_uniform_subpopulated_lattice
-from .utils.mdexport import interchange_to_openmm
-from .utils.jobhooks import ProjectHooks
 
-from .reactions import RXNS_DIR
-from .environments.cuboulder import CUAlpineEnvironment, CUBlancaShirtsEnvironment # inject CURC-specific environment config
+# Local utils imports
+try:
+    from . import FF_DIR
+    from .utils.logs import redirect_to_logfile
+    from .utils.dataIO import read_rxn_mapping_data
+    from .utils.offlib import elem_counts
+    from .utils.packing import generate_uniform_subpopulated_lattice
+    from .utils.mdexport import interchange_to_openmm
+    from .utils.forcefields import load_composite_forcefield
+    from .utils.jobhooks import ProjectHooks
+
+    from .reactions import RXNS_DIR
+    from .environments.cuboulder import CUAlpineEnvironment, CUBlancaShirtsEnvironment # inject CURC-specific environment config
+except ImportError:
+    # N.B.: as ugly as this is, it's necessary for cluster submission;
+    # the procedurally-generated scheduler scripts ALWAYS calls this script
+    # as "python src/project.py" (not "python -m src.project" as I'd have liked)
+    from __init__ import FF_DIR
+    from utils.logs import redirect_to_logfile
+    from utils.dataIO import read_rxn_mapping_data
+    from utils.offlib import elem_counts
+    from utils.packing import generate_uniform_subpopulated_lattice
+    from utils.mdexport import interchange_to_openmm
+    from utils.forcefields import load_composite_forcefield
+    from utils.jobhooks import ProjectHooks
+
+    from reactions import RXNS_DIR
+    from environments.cuboulder import CUAlpineEnvironment, CUBlancaShirtsEnvironment # inject CURC-specific environment config
 
 
 # DEFINING THE SIGNAC PROJECT CLASS PROPER 
 class PolymerBuildProject(FlowProject):
     '''Project for automated high-throughput generation of polymer structure and MD inputs from chemical data'''
-    # GLOBAL CONFIG - TODO: make these configuratble via argparse to the containing script; move to separate parameters dataclass?
+    # GLOBAL CONFIG
     ## LOGGING AND REPORTING FORMATS
     QUANTITY_PRECISION  : ClassVar[int] = 4 # number of decimal places to report Quantities when logging
     LOGLEVEL            : ClassVar[int] = logging.INFO
@@ -130,6 +151,9 @@ class PolymerBuildProject(FlowProject):
     SANITIZE_OPS        : ClassVar[SanitizeFlags] = SanitizeFlags.SANITIZE_ALL
     AROMATICITY_MODEL   : ClassVar[AromaticityModel] = AromaticityModel.AROMATICITY_MDL
     REGISTERED_RXNS     : ClassVar[dict[str, AnnotatedReaction]] = dict()
+
+    COMOLECULE_NUMBER_PROPNAME : ClassVar[str] = 'number_to_solvate'
+    COMOLECULE_SMILES_PROPNAME : ClassVar[str] = 'original_smiles'
     
     ENERGY_MINIMIZE_OLIGOMERS : ClassVar[bool] = True # whether to perform brief UFF energy minimization when generating oligomer conformers
     
@@ -140,8 +164,13 @@ class PolymerBuildProject(FlowProject):
     @classmethod # inject configure chemical sanitization setting
     def sanitized_mol_from_smiles(cls, smiles : str, separate_mols : bool=True) -> Union[Chem.Mol, tuple[Chem.Mol]]:
         '''Load a mol from SMILES and apply the predefined sanitization and aromaticity operations'''
-        mol = Chem.MolFromSmiles(smiles, sanitize=False) # CRITICAL that sanitize=False to avoid stripping
-        sanitize_mol(mol, sanitize_ops=cls.SANITIZE_OPS, aromaticity_model=cls.AROMATICITY_MODEL, in_place=True)
+        mol = Chem.MolFromSmiles(smiles, sanitize=False) # CRITICAL that sanitize=False to avoid stripping Hs
+        sanitize_mol(
+            mol,
+            sanitize_ops=cls.SANITIZE_OPS,
+            aromaticity_model=cls.AROMATICITY_MODEL,
+            in_place=True,
+        )
         
         if separate_mols:
             return Chem.GetMolFrags(mol, asMols=True)
@@ -153,11 +182,13 @@ class PolymerBuildProject(FlowProject):
     
     ALL_FRAGMENTS_PATH      : ClassVar[str] = 'fragments_all.json'
     OLIGOMER_FRAGMENTS_PATH : ClassVar[str] = 'fragments_oligomer.json'
-    
-    OLIGOMER_PDB     : ClassVar[str] = 'oligomer.pdb'
-    OLIGOMER_SDF     : ClassVar[str] = 'oligomer.sdf'
-    MELT_NEAT_SDF    : ClassVar[str] = 'melt_neat.sdf'
-    INTERCHANGE_PATH : ClassVar[str] = 'interchange.pkl'
+    OLIGOMER_PDB      : ClassVar[str] = 'oligomer.pdb'
+    OLIGOMER_SDF      : ClassVar[str] = 'oligomer.sdf'
+
+    COMOLECULE_SDF    : ClassVar[str] = 'comolecule_prototypes.sdf'
+    MELT_NEAT_SDF     : ClassVar[str] = 'melt_neat.sdf'
+    MELT_SOLVATED_SDF : ClassVar[str] = 'melt_solvated.sdf'
+    INTERCHANGE_PATH  : ClassVar[str] = 'interchange.pkl'
 
     # LAMMPS
     LAMMPS_DIR        : ClassVar[str] = 'LAMMPS'
@@ -204,7 +235,7 @@ _blacklisted_monomer_smiles : tuple[str, ...] = ( # monomers which are, for one 
 PolymerBuildProject.BLACKLISTED_MONOMER_MOLS = {
     smiles : PolymerBuildProject.sanitized_mol_from_smiles(
         expanded_SMILES(smiles, assign_map_nums=False),
-        separate_mols=False,  # though single-molecules, need to separate to avoid tuple mis-type
+        separate_mols=False,  # though single-molecules, need to NOT separate to avoid tuple mis-type
     )
         for smiles in _blacklisted_monomer_smiles
 }
@@ -226,6 +257,17 @@ def has_nonempty_file(job : Job, filename : str) -> bool:
     '''Check if a job contains a particular file which contains a nonzero amount of information'''
     return job.isfile(filename) and not is_empty(job.fn(filename))
 
+def load_job_forcefield(job : Job, deregister_am1bcc : bool=False) -> Optional[ForceField]:
+    '''Load the combined forcefield defined by the names (or paths) specified by the jobs "forcefields" field'''
+    try: # TODO: worth checking explicitly that the file exists/sanitizing missing .offxml etc.?
+        return load_composite_forcefield(
+            *job.sp.forcefields,
+            local_ff_dir=FF_DIR,
+            deregister_am1bcc=deregister_am1bcc
+        )
+    except (OSError, SMIRNOFFParseError) as error: # TODO: make error handling more specific and informative, left suggestive of common OSError for now
+        return None
+
 def load_job_rdmol(job : Job, separate_mols : bool=True) -> Chem.Mol:
     '''Loading RDKit molecule(s) from the SMILES in a job's statepoint'''
     return PolymerBuildProject.sanitized_mol_from_smiles(job.sp.smiles_explicit, separate_mols=separate_mols)
@@ -236,7 +278,14 @@ def load_job_rxn(job : Job) -> Optional[AnnotatedReaction]:
         return None
     return PolymerBuildProject.REGISTERED_RXNS[job_mechanism]
 
-def load_job_topology(job : Job, sdf_pathname : str, *start_args, **kwargs) -> Optional[Molecule]:
+def load_job_molcharger(job : Job) -> Optional[MolCharger]:
+    '''Load the Molecule partial charge assignment object specified by the charging method of this job'''
+    charger_type = MolCharger.subclass_registry.get(job.sp.pcharge_method, None)
+    if (charger_type is not None):
+        return charger_type()
+    return None # not strictly necessary, but kept to make logic explicit
+
+def load_job_topology(job : Job, sdf_pathname : str, *start_args, **kwargs) -> Optional[Topology]:
     '''Read and return an OpenFF Topology from well-formed SDF file,
     returning None if encoding or other errors are encountered'''
     if not job.isfile(sdf_pathname):
@@ -257,20 +306,59 @@ def load_job_topology(job : Job, sdf_pathname : str, *start_args, **kwargs) -> O
             logger.error('Empty or malformed SDF file, could not read structural data')
             return None
 
-load_job_melt_neat_topology = partial(
-    load_job_topology,
-    sdf_pathname=PolymerBuildProject.MELT_NEAT_SDF,
-    allow_undefined_stereo=PolymerBuildProject.RELAXED_STEREO
-)
+def load_job_oligomer_rdmol(job : Job) -> Optional[Chem.Mol]:
+    '''Load the cached RDKit Mol of the olgiomer structure, if it has been generated'''
+    try:
+        with Chem.SDMolSupplier(
+            job.fn(PolymerBuildProject.OLIGOMER_SDF),
+            sanitize=False,
+            removeHs=False
+        ) as suppl:
+            oligomer = suppl[0]
+            sanitize_mol(
+                oligomer,
+                sanitize_ops=PolymerBuildProject.SANITIZE_OPS,
+                aromaticity_model=PolymerBuildProject.AROMATICITY_MODEL,
+                in_place=True,
+            )
+            return oligomer
+    except OSError:
+        return None
+
 def load_job_oligomer_molecule(job : Job) -> Optional[Molecule]:
-    '''Check whether a topology has atomic partial charges assigned to it'''
+    '''Load the cached OpenFF Molecule of the olgiomer structure, if it has been generated'''
     oligomer_top = load_job_topology(
-        job, PolymerBuildProject.OLIGOMER_SDF,
-        allow_undefined_stereo=PolymerBuildProject.RELAXED_STEREO
+        job,
+        PolymerBuildProject.OLIGOMER_SDF,
+        allow_undefined_stereo=PolymerBuildProject.RELAXED_STEREO,
     )
     if oligomer_top is None:
         return None
     return topology.get_largest_offmol(oligomer_top)
+
+load_job_comol_prototypes_topology = partial(
+    load_job_topology,
+    sdf_pathname=PolymerBuildProject.COMOLECULE_SDF,
+    allow_undefined_stereo=PolymerBuildProject.RELAXED_STEREO,
+)
+
+load_job_melt_neat_topology = partial(
+    load_job_topology,
+    sdf_pathname=PolymerBuildProject.MELT_NEAT_SDF,
+    allow_undefined_stereo=PolymerBuildProject.RELAXED_STEREO,
+)
+
+load_job_melt_solvated_topology = partial(
+    load_job_topology,
+    sdf_pathname=PolymerBuildProject.MELT_SOLVATED_SDF,
+    allow_undefined_stereo=PolymerBuildProject.RELAXED_STEREO,
+)
+
+def load_job_melt_topology(job : Job) -> Optional[Topology]:
+    '''Load either the neat or solvated packed melt Topology, depending on whether mixture comolecules are specified'''
+    return load_job_melt_solvated_topology(job) \
+        if job.sp.mixture_spec \
+            else load_job_melt_neat_topology(job)
 
 def load_job_interchange(job : Job) -> Optional[Interchange]:
     '''Load a serialized OpenFF Interchange object into memory if one has been written'''
@@ -362,7 +450,7 @@ def has_too_many_monomers(job : Job) -> bool:
 
 @PolymerBuildProject.label
 def has_oversized_monomers(job : Job) -> bool:
-    '''Check whether it is known that monomers ARE too large'''
+    '''Check whether it is known that monomers are too large'''
     return monomer_sizes_validated(job) and job.doc['has_oversized_monomers']
 
 ### Sequential validation operations - cheapest done first
@@ -755,7 +843,7 @@ def deduce_residue_partition(job : Job) -> None:
     offmol = load_job_oligomer_molecule(job)
     offmol.to_file(job.fn(PolymerBuildProject.OLIGOMER_PDB), file_format='pdb') # save PDB from OpenFF molecule to guarantee formatting compatibility
     
-    with redirect_job_to_logfile(job) as logger: # TODO: add handling for UnassignedChemistryinPDB errors
+    with redirect_job_to_logfile(job) as logger:
         try:
             offtop = Topology.from_pdb(job.fn(PolymerBuildProject.OLIGOMER_PDB), _custom_substructures=monogrp.monomers)
         except UnassignedChemistryInPDBError:
@@ -797,18 +885,17 @@ def summarize_oligomer(job : Job) -> None:
 def assign_partial_charges(job : Job) -> None:
     '''Generate coordinates and build oligomer PDB file using mBuild'''
     offmol = load_job_oligomer_molecule(job)
-    charger_type = MolCharger.subclass_registry.get(job.sp.pcharge_method, None)
-    if charger_type is None:
+    charger = load_job_molcharger(job)
+    if charger is None:
         return
         
     with redirect_job_to_logfile(job) as logger:
-        charger = charger_type()
-        cmol = charger.charge_molecule(offmol)
-        topology.topology_to_sdf(job.fn(PolymerBuildProject.OLIGOMER_SDF), cmol.to_topology())
+        charged_offmol = charger.charge_molecule(offmol)
+        topology.topology_to_sdf(job.fn(PolymerBuildProject.OLIGOMER_SDF), charged_offmol.to_topology())
 
         # cache partial charge data to job records
-        pcharge_unit : OFFUnit = cmol.partial_charges.units
-        job.data.partial_charges = cmol.partial_charges.m_as(pcharge_unit)
+        pcharge_unit : OFFUnit = charged_offmol.partial_charges.units
+        job.data.partial_charges = charged_offmol.partial_charges.m_as(pcharge_unit)
         job.doc.pcharge_units = f'{pcharge_unit:simple}' # convert to string with explicit formatting to allow recovery of Unit type from text
 
 
@@ -881,7 +968,7 @@ def pack_oligomers_onto_lattice(job : Job) -> None:
 @PolymerBuildProject.operation(directives={'walltime' : 2/60, 'np' : 1})
 def determine_periodic_box(job : Job) -> None:
     '''Size and cache periodic box vectors for the resulting melt topology'''
-    melt_offtop    : Topology    = load_job_melt_neat_topology(job)
+    melt_offtop    : Topology    = load_job_melt_neat_topology(job) # N.B.: we WANT to use the neat melt to size the periodic box, since that'll determine the size of box into which we pack comolecules
     box_padding    : OFFQuantity = job.sp.box_padding_nm * offunit.nanometer
     nonbond_cutoff : OFFQuantity = job.sp.nonbonded_cutoff_nm * offunit.nanometer
     min_bbox       : OFFQuantity = 2 * nonbond_cutoff * np.eye(3) # box should be at least twice the nonbonded cutoff to avoid self-interaction
@@ -909,6 +996,100 @@ def determine_periodic_box(job : Job) -> None:
         job.doc.box_vector_dims = box_vector_dims
         job.data.box_vectors_nm = melt_box_vectors.m_as(offunit.nanometer) # store just the array of vectors (no units) in nm
 
+## 4.5) Comolecule (mixture) packing
+mix_in_comolecules = PolymerBuildProject.make_group(name='mix_in_comolecules')
+
+def comolecules_prototyped(job : Job) -> bool:
+    '''Whether a reference copy of each co-molecule (with accompanying conformer and charges) has been created and cached'''
+    if 'comolecules_prototyped' not in job.doc:
+        job.doc['comolecules_prototyped'] = {
+            comol_smiles : False
+                for comol_smiles in job.sp.mixture_spec.keys()
+        }
+    return all(job.doc['comolecules_prototyped'].values()) # will also return True if empty (vacuously); this is what we want when NO comolecules are demanded
+
+@PolymerBuildProject.label
+def solvated_melt_packed(job : Job) -> bool:
+    '''Whether comolecules have been successfully solvated into the previously-packed neat melt'''
+    return (not job.sp.mixture_spec) or has_nonempty_file(job, PolymerBuildProject.MELT_SOLVATED_SDF)
+
+@everything
+@mix_in_comolecules
+@PolymerBuildProject.pre(chemistry_allowed)
+@PolymerBuildProject.post(comolecules_prototyped)
+@PolymerBuildProject.operation(
+    directives={
+        'np' : 1,
+        'walltime' : lambda job : 2/60 * len(job.sp.mixture_spec) + 5/3_600,
+        # scale walltime up or down depending on the number of distinct comolecules;
+        # add constant 5 second bias to avoid 0-time ValueError for solvent-free systems
+    }
+) # DEV: walltime will depend on how many comolecules we have; will leave some wiggle room for now
+def prototype_comolecules(job : Job) -> None:
+    '''Generate reference molecules (with conformers and atomic partial charges) for each distinct comolecule to-be-solvated into the melt'''
+    charger = load_job_molcharger(job)
+    comol_top = Topology()
+    n_comols : int = len(job.sp.mixture_spec)
+
+    with redirect_job_to_logfile(job) as logger:
+        for i, (comol_smiles, number_comols) in enumerate(job.sp.mixture_spec.items(), start=1):
+            logger.info(f'Generating comolecule prototype {i}/{n_comols} with SMILES "{comol_smiles}"')
+            comol_offmol : Molecule = Molecule.from_rdkit(
+                PolymerBuildProject.sanitized_mol_from_smiles( # done this way as opposed to Molecule.from_smiles(...) to ensure consistent sanitization and aromaticity
+                    comol_smiles,
+                    separate_mols=False,
+                ),
+                allow_undefined_stereo=PolymerBuildProject.RELAXED_STEREO,
+                hydrogens_are_explicit=False, # call Chem.AddHs even if they are already present just to be safe (idempotent if they already are)
+            )
+            comol_offmol.generate_conformers(n_conformers=1)
+            comol_offmol.properties[PolymerBuildProject.COMOLECULE_NUMBER_PROPNAME] = number_comols
+            comol_offmol.properties[PolymerBuildProject.COMOLECULE_SMILES_PROPNAME] = comol_smiles
+            comol_charged_offmol = charger.charge_molecule(comol_offmol) # TODO: add special case for TIP3P water - DEV: might want to omit, forcing reliance on library charges?
+            
+            comol_top.add_molecule(comol_charged_offmol)
+            job.doc['comolecules_prototyped'][comol_smiles] = True # mark as prototyped
+
+        try:
+            topology.topology_to_sdf(job.fn(PolymerBuildProject.COMOLECULE_SDF), comol_top)
+        except OSError: # TODO: see if any other Exception types need to be intercepted here
+            for comol_smiles, prototyping_status in job.doc['comolecules_prototyped'].items():
+                job.doc['comolecules_prototyped'][comol_smiles] = False # reset progress if final write fails
+
+@everything
+@mix_in_comolecules
+@PolymerBuildProject.pre(comolecules_prototyped)
+@PolymerBuildProject.pre(pbcs_determined)
+@PolymerBuildProject.pre(neat_melt_packed)
+@PolymerBuildProject.post(solvated_melt_packed)
+@PolymerBuildProject.operation(directives={'walltime' : 20/60, 'np' : 1})
+def solvate_melt(job : Job) -> None:
+    '''Pack comolecule solvents into crevices of neat melt'''
+    # Load neat melt
+    melt_neat_offtop : Topology = load_job_melt_neat_topology(job)
+    with job.data:
+        box_vectors = job.data.box_vectors_nm[:] * offunit.nanometer
+
+    # Load comolecule prototypes
+    comolecules : list[Molecule] = []
+    n_comolecules : list[int] = []
+    comol_offtop : Topology = load_job_comol_prototypes_topology(job)
+    for comol in comol_offtop.molecules:
+        comolecules.append(comol)
+        n_comolecules.append(comol.properties[PolymerBuildProject.COMOLECULE_NUMBER_PROPNAME])
+
+    # Invoke Interchange packmol pack
+    with redirect_job_to_logfile(job) as logger:
+        solvated_offtop = packmol.pack_box(
+            molecules=comolecules,
+            number_of_copies=n_comolecules,
+            solute=melt_neat_offtop,
+            box_vectors=box_vectors, 
+            box_shape=packmol.UNIT_CUBE,
+            center_solute='BRICK',
+        )
+        topology.topology_to_sdf(job.fn(PolymerBuildProject.MELT_SOLVATED_SDF), solvated_offtop)
+
 
 ## 5) OPENFF INTERCHANGE EXPORT
 to_interchange = PolymerBuildProject.make_group(name='to_interchange') 
@@ -916,11 +1097,7 @@ to_interchange = PolymerBuildProject.make_group(name='to_interchange')
 @PolymerBuildProject.label
 def forcefield_is_valid(job : Job) -> bool:
     '''Check that the force field specified is a valid and loadable OpenFF forcefield file installed in the current environment'''
-    try: # TODO: worth checking explicitly that the file exists/sanitizing missing .offxml etc.?
-        ForceField(job.sp.forcefield) # NOTE: need to handle exception when the offxml provided doesn't exist
-        return True
-    except OSError as error: # TODO: make error handling more specific and informative, left suggestive of common OSError for now
-        return False
+    return (load_job_forcefield(job) is not None)
     
 @PolymerBuildProject.label
 def has_interchange(job : Job) -> bool:
@@ -937,15 +1114,17 @@ def interchange_stereo_inconsistent(job : Job) -> bool:
 @PolymerBuildProject.pre(coordinates_generated)
 @PolymerBuildProject.pre(partial_charges_assigned)
 @PolymerBuildProject.pre(neat_melt_packed)
+@PolymerBuildProject.pre(solvated_melt_packed) # NOTE: will always return True if not mixture spec is present, i.e. if no other molecules were to be solvated 
 @PolymerBuildProject.pre(pbcs_determined)
 @PolymerBuildProject.pre(forcefield_is_valid)
 @PolymerBuildProject.pre.not_(interchange_stereo_inconsistent)
 @PolymerBuildProject.post(has_interchange)
 @PolymerBuildProject.operation(directives={'walltime' : 20/60, 'np' : 1})
-def neat_melt_to_interchange(job : Job) -> None:
+def melt_to_interchange(job : Job) -> None:
     '''Create Interchange from final melt (w/ appropriate FF parameters and cutoffs) and pickle for reuse'''
-    cmol = load_job_oligomer_molecule(job) # need charged molecule for reference to avoid expensive AM1-BCC default
-    melt_offtop = load_job_melt_neat_topology(job)
+    charged_offmol = load_job_oligomer_molecule(job) # need charged molecule for reference to avoid expensive AM1-BCC default
+    comol_offtop = load_job_comol_prototypes_topology(job) or Topology() # handle no-solvent case gracefully during unpacking later
+    melt_offtop = load_job_melt_topology(job) # TODO: adjust depending on whether comolecules are present
 
     with redirect_job_to_logfile(job) as logger:
         nonbond_cutoff = job.sp.nonbonded_cutoff_nm * offunit.nanometer
@@ -960,14 +1139,18 @@ def neat_melt_to_interchange(job : Job) -> None:
             switch_width = 0.0*offunit.nanometer
             logger.warning('Disabling switching function for nonbonded forces')
 
-        logger.info(f'Obtaining force field parameters from OpenFF "{job.sp.forcefield}"')
-        forcefield = ForceField(job.sp.forcefield) # NOTE: need to handle exception when the offxml provided doesn't exist
-        if 'ToolkitAM1BCC' in forcefield.registered_parameter_handlers:
-            forcefield.deregister_parameter_handler('ToolkitAM1BCC') # forcibly remove AM1BCC handler so a fail siomorphism doesn't result in prohibitively-long AM1BCC calculation
+        logger.info(f'Obtaining force field parameters from SMIRNOFF forcefield(s): {job.sp.forcefields!s}"')
+        forcefield = load_job_forcefield(job, deregister_am1bcc=True) # NOTE: need to handle exception when the offxml provided doesn't exist
 
         try:
             logger.info('Initializing OpenFF Interchange from melt topology and force field')
-            interchange = forcefield.create_interchange(melt_offtop, charge_from_molecules=[cmol])
+            interchange = forcefield.create_interchange(
+                melt_offtop,
+                charge_from_molecules=[
+                    charged_offmol,
+                    *comol_offtop.molecules,
+                ]
+            )
         except RuntimeError:
             logger.error('Could not create OpenFF Interchange instance due to stereochemistry incompatibility with single oligomer')
             job.doc.interchange_stereo_consistent = False
@@ -1226,7 +1409,7 @@ def main() -> None:
     PolymerBuildProject.SANITIZE_OPS = SanitizeFlags.names[start_args.sanitization_operations]   # will raise KeyError on invalid flag names
     PolymerBuildProject.AROMATICITY_MODEL = AromaticityModel.names[start_args.aromaticity_model] # will raise KeyError on invalid flag names
 
-    PolymerBuildProject.REGISTERED_RXNS = {} # initialize predefined reactions
+    PolymerBuildProject.REGISTERED_RXNS = {}
     for rxnname, rxn_smarts in read_rxn_mapping_data(start_args.rxn_mapping_path).items():
         rxn = AnnotatedReaction.from_smarts(rxn_smarts)
         rxn.Initialize()
@@ -1249,7 +1432,7 @@ def main() -> None:
     new_project = project_hooks.install_hooks(new_project)
 
     # mock remaining Signac args for parser and run Project's shell interface
-    sys.argv[1:] = signac_args # NOTE: this is an ugly hack to allow this script to take CLI args while not disturbing Signacs tastes for arguments
+    sys.argv[1:] = signac_args # NOTE: this is an ugly hack to allow this script to take CLI args while not disturbing Signac's taste for arguments
     new_project.main()
 
 if __name__ == '__main__':

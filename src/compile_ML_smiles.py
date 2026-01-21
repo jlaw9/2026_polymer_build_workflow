@@ -1,3 +1,8 @@
+'''For stripping out SMILES strings from assembled oligomers structures to use downstream for transfer learning'''
+
+__author__ = 'Timotej Bernat'
+__email__ = 'timotej.bernat@colorado.edu'
+
 from argparse import ArgumentParser
 from rich.progress import track
 
@@ -6,6 +11,9 @@ import pandas as pd
 
 from rdkit import Chem
 from polymerist.genutils.fileutils.pathutils import assemble_path
+from .project import PolymerBuildProject # my custom tooling for this project
+
+from .utils.dataIO import validate_file_path
 from .project import PolymerBuildProject # my custom tooling for this project
 
 
@@ -57,17 +65,25 @@ if __name__ == '__main__':
         help='Whether to permit overwriting output files which already exist (default is False)'
     )
     parser.add_argument(
-        '-ndat',
+        '-namdat',
         '--name-datafile',
         type=str,
         default='oligomer_SMILES_for_ML',
     )
     args = parser.parse_args()
-    args.output_dir.mkdir(parents=False, exist_ok=args.allow_overwrites)
+
+    # Prepare output file for write
+    args.output_dir.mkdir(parents=False, exist_ok=True)
+    path_smiles = assemble_path(args.output_dir, args.name_datafile, extension='.csv')
+    validate_file_path(
+        path_smiles,
+        check_missing=False,
+        check_already_exists=not args.allow_overwrites,
+        valid_extensions=('.csv',),
+    )
 
     # Compile and write SMILES data
     project = PolymerBuildProject.get_project(args.project_path)
     smiles_df = compile_oligomer_SMILES_data(project)
     
-    path_smiles = assemble_path(args.output_dir, args.name_datafile, extension='.csv')
     smiles_df.to_csv(path_smiles, index=False)

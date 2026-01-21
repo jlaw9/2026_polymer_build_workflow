@@ -1,5 +1,8 @@
 '''For cleaning up and standardizing raw monomer input data files shipped from NREL'''
 
+__author__ = 'Timotej Bernat'
+__email__ = 'timotej.bernat@colorado.edu'
+
 # Logging
 import logging
 
@@ -8,14 +11,15 @@ warnings.filterwarnings(action='ignore')
 
 # Command line interface
 from argparse import ArgumentParser, Namespace
+from typing import Iterable, Mapping
 
 # File I/O
 import pandas as pd
 from pathlib import Path
-from typing import Iterable
 
 # Custom utils imports 
 from polymerist.genutils.textual.prettyprint import stringify_dict
+from polymerist.genutils.fileutils.pathutils import assemble_path
 from polymerist.smileslib.cleanup import expanded_SMILES
 
 from .utils.dataIO import validate_file_path, WRITER_FNS_BY_EXT, read_monomer_data
@@ -29,13 +33,15 @@ def sanitize_monomer_data_paths(args : Namespace) -> list[Path]:
     if not args.output_dir.is_dir():
         args.output_dir.mkdir()
 
-    if args.glob is None:
+    if args.monomer_paths is not None:
         return args.monomer_paths
-    elif args.monomer_paths is None:
+    elif args.glob is not None:
         return [path for path in Path.cwd().glob(args.glob)]
+    else:
+        raise ValueError('Must provide either monomer data paths or a glob pattern to locate input files')
     
 ## STANDARDIZING MONOMER DATASET FIELDS
-def locate_attr_cols(dataframe : pd.DataFrame, columns_to_check : dict[str, Iterable[str]]) -> dict[str, str]:
+def locate_attr_cols(dataframe : pd.DataFrame, columns_to_check : Mapping[str, Iterable[str]]) -> dict[str, str]:
     '''Takes a dataframe of monomer training data and a dict of desired attributes and the columns in the dataframe it might be found in
     Checks that those columns are present and returns dict with first column for each if all are present, or NoneType otherwise'''
     attr_columns : dict[str, str] = {}
@@ -45,7 +51,7 @@ def locate_attr_cols(dataframe : pd.DataFrame, columns_to_check : dict[str, Iter
                 attr_columns[targ_attr] = col_name
                 break
         else:
-            raise IndexError(f'No matching columns for attribute "{targ_attr} were found from queries: "{col_names_to_check}"')
+            raise IndexError(f'No matching columns for attribute "{targ_attr}" were found from queries: "{col_names_to_check}"')
     logging.info('Found valid columns name mappings:\n\t' + stringify_dict(attr_columns))
         
     return attr_columns
@@ -53,8 +59,9 @@ def locate_attr_cols(dataframe : pd.DataFrame, columns_to_check : dict[str, Iter
 def standardize_monomer_data_columns(dataframe : pd.DataFrame) -> None:
     '''Standardize column naming and format of required monomer data DataFrame (in-place)'''
     STATEPOINT_ATTR_COLUMNS : dict[str, tuple[str, ...]] = { # the attributes to save and the column(s) to check for these values
-        'smiles_original' : ('smiles_original', 'smiles_monomer', 'monomer', 'monomers', 'Monomer', 'Monomers'), # NOTE: !!ESSENTIAL!! for idempotency that column name come first for now
-        'mechanism_labelled' : ('mechanism_labelled', 'mechanism', 'rxnname', 'Chemistry'), # NOTE: !!ESSENTIAL!! for idempotency that column name come first for now
+        'smiles_original' : ('smiles_original', 'smiles_monomer', 'monomer_smiles', 'monomer', 'monomers', 'Monomer', 'Monomers'), # NOTE: !!ESSENTIAL!! for idempotency that column name come first for now
+        # DEV: as of 12/19/25, have deprecated requirement for labelled mechanism (since the workflow does not require that info to run)
+        # 'mechanism_labelled' : ('mechanism_labelled', 'mechanism', 'rxnname', 'Chemistry'), # NOTE: !!ESSENTIAL!! for idempotency that column name come first for now
     }
     attr_locs = locate_attr_cols(dataframe, STATEPOINT_ATTR_COLUMNS) # this will raise Exception if any of the fields cannot be found
     dataframe.rename(
@@ -74,7 +81,12 @@ def format_merged(args : Namespace) -> None:
     "master" file with shared columns, and writes this to a single output file
     '''
     output_path = args.output_dir / args.output_file
-    validate_file_path(output_path, check_missing=False, check_already_exists=not args.allow_overwrites, valid_extensions=WRITER_FNS_BY_EXT)
+    validate_file_path(
+        output_path,
+        check_missing=False,
+        check_already_exists=not args.allow_overwrites,
+        valid_extensions=WRITER_FNS_BY_EXT,
+    )
 
     monomer_paths = sanitize_monomer_data_paths(args)
     monomer_dfs = read_monomer_data(monomer_paths)
@@ -115,8 +127,18 @@ def format_sequential(args : Namespace) -> None:
         logging.info('Determining output file names via the "postfix" directive')
         output_paths : list[Path] = []
         for input_path in monomer_paths:
-            output_path = args.output_dir / f'{input_path.stem}_{args.postfix}{input_path.suffix}'
-            validate_file_path(output_path, check_missing=False, check_already_exists=not args.allow_overwrites, valid_extensions=WRITER_FNS_BY_EXT)
+            output_path = assemble_path(
+                args.output_dir,
+                input_path.stem,
+                extension=input_path.suffix,
+                postfix=args.postfix,
+            )
+            validate_file_path(
+                output_path,
+                check_missing=False,
+                check_already_exists=not args.allow_overwrites,
+                valid_extensions=WRITER_FNS_BY_EXT,
+            )
             output_paths.append(output_path)
 
     elif args.postfix is None: 
@@ -129,8 +151,17 @@ def format_sequential(args : Namespace) -> None:
         
         output_paths : list[Path] = []
         for output_name, input_path in zip(args.new_names, monomer_paths):
-            output_path = args.output_dir / f'{output_name}{input_path.suffix}'
-            validate_file_path(output_path, check_missing=False, check_already_exists=not args.allow_overwrites, valid_extensions=WRITER_FNS_BY_EXT)
+            output_path = assemble_path(
+                args.output_dir,
+                output_name,
+                extension=input_path.suffix,
+            )
+            validate_file_path(
+                output_path,
+                check_missing=False,
+                check_already_exists=not args.allow_overwrites,
+                valid_extensions=WRITER_FNS_BY_EXT,
+            )
             output_paths.append(output_path)
 
     # read, reformat, and write out data

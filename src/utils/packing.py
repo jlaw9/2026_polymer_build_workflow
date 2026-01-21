@@ -1,5 +1,8 @@
 '''Tools for generating and filling lattices of molecules'''
 
+__author__ = 'Timotej Bernat'
+__email__ = 'timotej.bernat@colorado.edu'
+
 import numpy as np
 from polymerist.maths.lattices.integral import CubicIntegerLattice
 

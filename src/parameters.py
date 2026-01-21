@@ -1,73 +1,212 @@
-'''Programmatically redefine swept and shared parameter sets for a polymer build Signac Project'''
+'''For reading, writing, and representing polymer build job statespace parameters'''
+
+__author__ = 'Timotej Bernat'
+__email__ = 'timotej.bernat@colorado.edu'
 
 import logging
-logging.basicConfig(level=logging.INFO)
+LOGGER = logging.getLogger(__name__)
+LOGGER.setLevel(logging.INFO)
+from argparse import ArgumentParser, Namespace
 
-from dataclasses import dataclass, field
+from typing import Any, Hashable, Mapping, TypeVar, Union
+from dataclasses import dataclass, field, fields
 
+import json
+from pathlib import Path
+
+from polymerist.genutils.fileutils.pathutils import assemble_path, allow_string_paths
 from polymerist.genutils.fileutils.jsonio.jsonify import make_jsonifiable
+from polymerist.genutils.fileutils.jsonio.serialize import JSONSerializable
+# from polymerist.mdtools.openfftools.partialcharge.molchargers import MolCharger
+
+from .utils.dataIO import validate_file_path
+from .utils.mixtures import MixtureSpec, MixtureSpecSerializer, ParseMixtureSpec
 from . import _parent_dir
 
 
 # HARD-CODED PATHS WHERE PARAMETERS SHOULD LIVE
 PARAMS_DIR = _parent_dir / 'parameters'
 PARAMS_DIR.mkdir(exist_ok=True)
-
-PARAMS_CONFIG_PATH = PARAMS_DIR / 'parameters_config.json'
 PARAMS_SWEPT_PATH  = PARAMS_DIR / 'parameters_swept.json'
 
 # DATACLASSES TO GIVE STRUCTURE TO PARAMETER SETS
-@make_jsonifiable
+@make_jsonifiable(type_serializer=MixtureSpecSerializer)
 @dataclass
-class ParametersSwept:
-    '''Encapsulation class for tracking varying design parameters between polymers'''
-    DOP             : list[int] = field(default_factory=list)
-    n_atoms_max     : list[int] = field(default_factory=list)
-    pcharge_method  : list[str] = field(default_factory=list)
+class SystemParameters:
+    '''
+    For encapsulating a set of non-chemical parameters about a polymer build job
+    e.g. related to system extent, force field configuration, mixture molecules, etc.
+    '''
+    DOP            : int
+    n_atoms_max    : int
+    pcharge_method : str = 'Espaloma-AM1-BCC' # 'NAGL'
+    mixture_spec   : MixtureSpec = field(default_factory=MixtureSpec)
+    # NOTE: parameters below generally shouldn't be swept through, and sensible defaults are provided for all
+    forcefields : list = field(default_factory=lambda : ['openff_unconstrained-2.0.0.offxml']) # 'openff-2.0.0.offxml'
+    # DEV: more accurate typehint of list[str] breaks isinstance check against field.type, since it is a generic, not a builtin type
+    minimize_oligomer      : bool  = True
+    use_switching_function : bool  = False
+    switch_width_nm        : float = 0.1
+    nonbonded_cutoff_nm    : float = 0.9
+    box_padding_nm         : float = 0.0
 
-    def __post_init__(self) -> None:
-        for attrname in ('DOP', 'n_atoms_max', 'pcharge_method'):
-            if not getattr(self, attrname):
-                raise ValueError(f'Required attribute "{attrname}" unset')
+def standardize_params_swept(json_dict : dict[str, JSONSerializable]) -> Mapping[str, list[Hashable]]:
+    '''Read and format a JSON-serialized parameter statespace into a
+    mapping from SystemParameter fields to sets of swept parameter values'''
+    params_swept : dict[str, list[Any]] = dict()
+    for field_ in fields(SystemParameters): # underscore to avoid confusion with dataclasses.field
+        values = json_dict[field_.name] # don't use dict.get(); want a big, loud KeyError if no values for that field are provided
+        if not isinstance(values, list): # reasonable assumption IFF json_dict comes directly from a JSON file
+            values = [values]
 
-@make_jsonifiable
-@dataclass
-class ParametersConfig: # TODO: should these just be singleton sets in the cartesian product?
-    '''Encapsulation class for tracking fixed configuration parameters that shouldn't be changed'''
-    forcefield              : str
-    minimize_oligomer       : bool
-    use_switching_function  : bool = False
-    switch_width_nm         : float = 0.1
-    nonbonded_cutoff_nm     : float = 0.9
-    box_padding_nm          : float = 0.0
+        params_swept[field_.name] = [ # additional irrelevant parameters read from JSON are not injected
+            field_.type(value) if not isinstance(value, field_.type) else value # assumes hashability
+                for value in values
+        ]
+    
+    return params_swept
 
+@allow_string_paths
+def write_params_json(path_config : Path, **kwargs) -> None:
+    LOGGER.info('Writing swept parameters to file...')
+    with path_config.open('w') as file_config:
+        json.dump(
+            standardize_params_swept(kwargs),
+            file_config,
+            indent=4,
+            default=MixtureSpecSerializer.encode,
+        )
+    LOGGER.info(f'Swept parameters written to {path_config!s}')
 
-# PROCEDURAL REGENERATION OF PARAMETER FILES IF THIS SCRIPT IS INVOKED DIRECTLY
 if __name__ == '__main__':
-    params_swept = ParametersSwept( # define other parameters to sweep here!
-        DOP=[
-            3,
-            5,
-        ],
-        n_atoms_max=[
-            # 10_000,
-            20_000,
-        ],
-        pcharge_method=[
-            'Espaloma-AM1-BCC',
-            # 'NAGL',
-        ],
-    )
-    logging.info('Writing swept parameters to file')
-    params_swept.to_file(PARAMS_SWEPT_PATH)
+    logging.basicConfig(level=logging.INFO, force=True)
 
-    params_config = ParametersConfig( # shared default parameters that we don't expect to have to sweep through
-        forcefield='openff_unconstrained-2.0.0.offxml', # 'openff-2.0.0.offxml',
-        minimize_oligomer=True,
-        use_switching_function=False,
-        switch_width_nm=0.1,
-        nonbonded_cutoff_nm=0.9,
-        box_padding_nm=0.0,
+    parser = ArgumentParser()
+    subparsers = parser.add_subparsers(dest='subparser')
+
+    # parameter file path
+    parser_write = subparsers.add_parser('write')
+    parser_write.add_argument(
+        '-od',
+        '--output-dir',
+        type=Path,
+        default=PARAMS_DIR,
+        help='The directory into which the outputted data file and plots will be written'
     )
-    logging.info('Writing config parameters to file')
-    params_config.to_file(PARAMS_CONFIG_PATH)
+    parser_write.add_argument(
+        '-namdat',
+        '--name-datafile',
+        type=str,
+        default='parameters_swept',
+    )
+    parser_write.add_argument(
+        '-aow',
+        '--allow-overwrites',
+        action='store_true',
+        help='Whether to permit overwriting output files which already exist (default is False)'
+    )
+    # swept parameter values
+    parser_write.add_argument(
+        '-dop',
+        '--DOP', # no long-form name to match SystemParameters signature
+        type=int,
+        nargs='+',
+        default=[3, 5],
+        help='Degree(s) of polymerization of oligomer chemistries',
+    )
+    parser_write.add_argument(
+        '-natmmax',
+        '--n-atoms-max',
+        type=int,
+        nargs='+',
+        default=[20_000],
+        help='Maximum number of POLYMER atoms to pack into a box',
+    )
+    parser_write.add_argument(
+        '-pcm',
+        '--pcharge-method',
+        type=str,
+        nargs='+',
+        # choices=list(MolCharger.subclass_registry.keys()) # DEV: omitted because OpenFF import slows script to a crawl
+        choices=[
+            'AM1-BCC-ELF10',
+            'Espaloma-AM1-BCC',
+            'NAGL',
+        ],
+        default='Espaloma-AM1-BCC',
+        help='Method to use for assigning atomic partial charges to molecules',
+    )
+    parser_write.add_argument(
+        '-ffs',
+        '--forcefields',
+        type=json.loads, # enables parsing lists OF lists
+        # nargs='+',
+        default=[['openff_unconstrained-2.0.0.offxml']], # needs to be list of lists to be properly swept through
+        # default='openff-2.0.0.offxml',
+        help='Name of OpenFF ForceField to use when parameterizing molecules',
+    )
+    parser.add_argument(
+        '-mix',
+        '--mixture-spec',
+        type=MixtureSpec,
+        nargs='+',
+        default={},
+        action=ParseMixtureSpec, # bespoke processing of mixture dict
+    )
+    parser_write.add_argument(
+        '-no-emin',
+        '--dont-minimize-oligomer',
+        dest='minimize_oligomer', # needed to alias to 
+        action='store_false', # True by default
+        help='Whether to perform UFF energy minimization after generating prototype oligomer conformer'
+    )
+    parser_write.add_argument(
+        '-use-sf',
+        '--use_switching_function',
+        action='store_true',
+        help='Whether to use a switching function to smooth the non-bonded cutoff'  \
+            '(will give different results between MD engines if enabled)'
+    )
+    parser_write.add_argument(
+        '-sw-nm',
+        '--switch-width-nm',
+        type=float,
+        nargs='+',
+        default=0.1,
+        help='Width of switching function interpolation (in nanometers), if switching function is enabled',
+    )
+    parser_write.add_argument(
+        '-nbcut-nm',
+        '--nonbonded-cutoff-nm',
+        type=float,
+        nargs='+',
+        default=0.9,
+        help='Distance (in nanometers) beyond which to truncate long-ranged nonbonded interactions',
+    )
+    parser_write.add_argument(
+        '-bpad-nm',
+        '--box-padding-nm',
+        type=float,
+        nargs='+',
+        default=0.0,
+        help='Extra amount (in nanometers) to pad packed box away from each face beyond tight bounding box dimensions',
+    )
+
+    # parse args from subparser and dispatch
+    args = parser.parse_args()
+
+    if args.subparser == 'write':
+        ## assemble output path
+        args.output_dir.mkdir(parents=False, exist_ok=True)
+        path_config = assemble_path(
+            args.output_dir,
+            args.name_datafile,
+            extension='.json',
+        )
+        validate_file_path(
+            path_config,
+            check_missing=False,
+            check_already_exists=not args.allow_overwrites,
+            valid_extensions=('.json',)
+        )
+        write_params_json(path_config, **vars(args))

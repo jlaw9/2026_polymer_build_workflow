@@ -1,0 +1,19 @@
+#!/bin/bash
+
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=1
+#SBATCH --time=00:02:00
+#SBATCH --partition=amilan
+#SBATCH --qos=normal
+#SBATCH --account=ucb500_asc2
+# #SBATCH --account=ucb-general
+#SBATCH --output=joblog.out
+#SBATCH --job-name=PolyID
+# #SBATCH --mail-user=tibe3324@colorado.edu
+# #SBATCH --mail-type=END
+
+module purge
+module load miniforge
+mamba activate nrel-polymers
+
+bash execute.sh polyID_test 6

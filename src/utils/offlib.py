@@ -1,5 +1,8 @@
 '''For reading info from and writing info to OpenFF Molecule/Topology objects'''
 
+__author__ = 'Timotej Bernat'
+__email__ = 'timotej.bernat@colorado.edu'
+
 from typing import Union
 
 import re

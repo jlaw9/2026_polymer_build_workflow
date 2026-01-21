@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<SMIRNOFF version="0.3" aromaticity_model="OEAroModel_MDL">
+    <vdW version="0.4" potential="Lennard-Jones-12-6" combining_rules="Lorentz-Berthelot" scale12="0.0" scale13="0.0" scale14="0.5" scale15="1.0" cutoff="9.0 * angstrom ** 1" switch_width="1.0 * angstrom ** 1" periodic_method="cutoff" nonperiodic_method="no-cutoff">
+        <Atom smirks="[#8X1+0]=[#6X2+0:1]=[#8X1+0]" epsilon="0.22449049 * kilojoule_per_mole ** 1" id="CO2_C" sigma="0.2800 * nanometer ** 1"></Atom>
+        <Atom smirks="[#8X1+0:1]=[#6X2+0]=[#8X1+0]" epsilon="0.65684255 * kilocalorie_per_mole ** 1" id="CO2_O" sigma="0.3050 * nanometer ** 1"></Atom>
+    </vdW>
+    <LibraryCharges version="0.3">
+        <LibraryCharge smirks="[#8X1+0]=[#6X2+0:1]=[#8X1+0]" charge1="0.700 * elementary_charge ** 1" id="CO2_C"></LibraryCharge>
+        <LibraryCharge smirks="[#8X1+0:1]=[#6X2+0]=[#8X1+0]" charge1="-0.350 * elementary_charge ** 1" id="CO2_O"></LibraryCharge>
+    </LibraryCharges>
+    <Electrostatics version="0.4" scale12="0.0" scale13="0.0" scale14="0.8333333333" scale15="1.0" cutoff="9.0 * angstrom ** 1" switch_width="0.0 * angstrom ** 1" periodic_potential="Ewald3D-ConductingBoundary" nonperiodic_potential="Coulomb" exception_potential="Coulomb"></Electrostatics>
+<Bonds version="0.4" potential="harmonic" fractional_bondorder_method="AM1-Wiberg" fractional_bondorder_interpolation="linear">
+  <Bond smirks="[#8X1:1]=[#6X1:2]" id="b1" length="1.16 * angstrom ** 1" k="2566.76314532 * kilocalorie_per_mole ** 1 * angstrom ** -2"></Bond>
+</Bonds>
+    <Angles version="0.3" potential="harmonic">
+        <Angle smirks="[#8X1+0:1]=[#6X2+0:2]=[#8X1+0:3]" angle="180.0 * degree ** 1" k="295.41108987 * kilocalorie_per_mole ** 1 * radian ** -2" id="a1"></Angle>
+    </Angles>
+</SMIRNOFF>
+<!-- From https://pubs.acs.org/doi/10.1021/je5009526  -->
+
