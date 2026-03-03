@@ -28,6 +28,7 @@ src/reactions
 # plot outputs
 molecule_sizes/*
 bond_length*.png
+rxn_images/*
 
 # benchmarks and profiling
 profile.csv
