@@ -4,6 +4,7 @@ __author__ = 'Timotej Bernat'
 __email__ = 'timotej.bernat@colorado.edu'
 
 from typing import Callable, Optional
+import logging
 import time
 
 import json
@@ -65,7 +66,10 @@ class ProjectHooks:
             op_times = job.doc.get(self.operation_times_attr, {})
             start_time = op_times.pop(f'{operation_name}_start') # look up and withdraw start time
             if start_time is None: # NOTE: dicts in Signac documents are NOT pure Python dicts; their "pop()" method returns None by default and never raises KeyError
-                raise ValueError(f'No start time recorded for operation "{operation_name}"; cannot calculate operation duration')
+                # aggregate operations (e.g. pack_oligomers_onto_lattice) do not record a start time against
+                # every member job; timing is telemetry, so skip it rather than aborting the build
+                logging.warning(f'No start time recorded for operation "{operation_name}"; skipping duration record')
+                return
             
             job.doc[self.operation_times_attr].update({operation_name : (time.time() - start_time)})
         return record_operation_duration
