@@ -65,3 +65,4 @@ tmp.in
 *_production/
 quickstart_project/
 src/reactions/*.json
+examples/*_fmt.csv
