@@ -3,7 +3,7 @@
 # Parameters
 runlevel=$1
 n_sampled="${2:-6}"
-datapath="${3:-"src/monomer_data/PolyID_master_unique.csv"}"
+datapath="${3:-"examples/monomers_example.csv"}"
 projname="${4:-"polyID"}"
 outdir="${5:-"."}"
 

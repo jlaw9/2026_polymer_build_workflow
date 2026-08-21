@@ -60,3 +60,8 @@ tmp.in
 *.out
 *.log
 *.tar.gz
+# build projects and workflow outputs
+*_test/
+*_production/
+quickstart_project/
+src/reactions/*.json

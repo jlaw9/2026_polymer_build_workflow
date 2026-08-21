@@ -1,4 +1,36 @@
-A software workflow for automated, high-throughput generation of molecular dynamics (MD) inputs for polymer systems. Works with on databases of monomers (given via SMILES) and system size specifications without needing to provide MD engine-specific inputs
+# polymer-build-workflow
+
+A software workflow for automated, high-throughput generation of molecular
+dynamics (MD) inputs for polymer systems. Works from databases of monomers
+(given via SMILES) and system size specifications, without needing to provide MD
+engine-specific inputs.
+
+This is the light, data-free distribution of the build workflow: the source
+shell plus a small worked example, with the study-specific datasets and
+production projects removed. The full research repository, including the
+monomer databases and the projects used for published work, is
+[NREL_polymers](https://github.com/timbernat/NREL_polymers).
+
+# Quickstart
+
+After installing the environment (below), build three polymer chemistries
+end-to-end from the bundled example monomer set:
+
+```sh
+bash examples/quickstart.sh
+```
+
+That runs the four steps the rest of this README documents in detail:
+initialize reaction templates, write build parameters, create a Signac project
+from `examples/monomers_example.csv`, and run the build. MD inputs land in
+`quickstart_project/workspace/<job-id>/`. Pass a chemistry count and degree of
+polymerization to vary it, e.g. `bash examples/quickstart.sh 5 10`.
+
+`examples/monomers_example.csv` holds ten common polymers spanning six of the
+eight supported mechanisms (PET, PBT, nylon-6,6, nylon-6,10, Kapton, BPA
+polycarbonate, an HDI/BDO polyurethane, polystyrene, PMMA, PVAc), and doubles as
+a template for the input format described under "Monomer data" below.
+
 
 # Installation
 It is assumed you have access to a package and environment manager like `mamba` for this installation
@@ -47,7 +79,7 @@ Chemically, each distinct polymer chemistry in a project is encoded by its monom
 
 Any additional fields in each record of the data file can contain arbitrary data related to the monomer preparation e.g. name for resulting polymer, expected polymer density, labelled mechanism of polymerization, etc. These additional fields are transferred to the `document` portion of any job acting on the specified monomer chemistry in that record.
 
-Once you have supplied you monomer data file(s), you can preprocess them to ensure formatting compliance with the `src.format_data` util. This supports two formatting modes:
+Once you have supplied your monomer data file(s), you can preprocess them to ensure formatting compliance with the `src.format_data` util. This supports two formatting modes:
 * `Merge`: combines one or more data files into a single, formatted "master" file
 * `Sequential`: takes one of more data files and formats each separately into the same number of formatted datafiles
 
