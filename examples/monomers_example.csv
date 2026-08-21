@@ -1,11 +1,8 @@
-polymer_name,mechanism,smiles_monomer
-PET,polyester,"('COC(=O)c1ccc(C(=O)OC)cc1', 'OCCO')"
-PBT,polyester,"('COC(=O)c1ccc(C(=O)OC)cc1', 'OCCCCO')"
-Nylon-6.6,polyamide,"('OC(=O)CCCCC(=O)O', 'NCCCCCCN')"
-Nylon-6.10,polyamide,"('OC(=O)CCCCCCCCC(=O)O', 'NCCCCCCN')"
-Kapton (PMDA-ODA),polyimide,"('O=C1OC(=O)c2cc3c(cc21)C(=O)OC3=O', 'Nc1ccc(Oc2ccc(N)cc2)cc1')"
-BPA polycarbonate,polycarbonate_nonphosgene,"('CC(C)(c1ccc(O)cc1)c1ccc(O)cc1', 'COC(=O)OC')"
+polymer_name,mechanism_expected,smiles_monomer
+PET,polyester,"('OCCO', 'OC(=O)c1ccc(cc1)C(=O)O')"
+PBT,polyester,"('OCCCCO', 'OC(=O)c1ccc(cc1)C(=O)O')"
+Nylon-6.6,polyamide,"('NCCCCCCN', 'O=C(O)CCCCC(=O)O')"
+Nylon-6.10,polyamide,"('NCCCCCCN', 'O=C(O)CCCCCCCCC(=O)O')"
 PU (HDI-BDO),polyurethane_isocyanate,"('O=C=NCCCCCCN=C=O', 'OCCCCO')"
-Polystyrene,polyvinyl_head_tail,"('C=Cc1ccccc1',)"
-PMMA,polyvinyl_head_tail,"('C=C(C)C(=O)OC',)"
+Polystyrene,polyvinyl_head_tail,"('c1ccccc1C=C',)"
 PVAc,polyvinyl_head_tail,"('C=COC(C)=O',)"

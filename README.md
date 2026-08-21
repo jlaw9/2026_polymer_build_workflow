@@ -5,11 +5,9 @@ dynamics (MD) inputs for polymer systems. Works from databases of monomers
 (given via SMILES) and system size specifications, without needing to provide MD
 engine-specific inputs.
 
-This is the light, data-free distribution of the build workflow: the source
-shell plus a small worked example, with the study-specific datasets and
-production projects removed. The full research repository, including the
-monomer databases and the projects used for published work, is
-[NREL_polymers](https://github.com/timbernat/NREL_polymers).
+This repository accompanies the publication and ships the workflow itself: the
+source plus a small worked example, without the study-specific monomer
+databases or production projects.
 
 # Quickstart
 
@@ -26,18 +24,40 @@ from `examples/monomers_example.csv`, and run the build. MD inputs land in
 `quickstart_project/workspace/<job-id>/`. Pass a chemistry count and degree of
 polymerization to vary it, e.g. `bash examples/quickstart.sh 5 10`.
 
-`examples/monomers_example.csv` holds ten common polymers spanning six of the
-eight supported mechanisms (PET, PBT, nylon-6,6, nylon-6,10, Kapton, BPA
-polycarbonate, an HDI/BDO polyurethane, polystyrene, PMMA, PVAc), and doubles as
-a template for the input format described under "Monomer data" below.
+`examples/monomers_example.csv` holds seven common polymers spanning four of the
+eight supported mechanisms (PET, PBT, nylon-6,6, nylon-6,10, an HDI/BDO
+polyurethane, polystyrene, PVAc), and doubles as a template for the
+input format described under "Monomer data" below. Every entry has been checked
+end-to-end against the shipped reaction templates.
+
+Two notes if you are bringing your own monomers:
+
+* Two reaction mappings ship here, and they trade off against each other.
+  `src/reactions/rxns_polyID.json` (used by the quickstart and by
+  `status.sh`/`execute.sh`) covers seven mechanisms, and its carbonate entry is
+  the phosgene route, so non-phosgene polycarbonates are not perceived.
+  `src/reactions/rxn_smarts.json` covers all eight, but its polyester and
+  non-phosgene carbonate templates both match a diol plus a diacid, so
+  polyesters such as PET become ambiguous and are rejected. Pick the mapping
+  that suits your chemistries, or narrow it to the mechanisms you need.
+* Any extra column in your monomer file is copied into the Signac job document,
+  so avoid naming one `mechanism` — that key is set by the workflow itself
+  during mechanism perception, and overwriting it makes the build fail. The
+  example file uses `mechanism_expected` for this reason.
+
+Two mechanisms in the shipped templates did not perceive their own documented
+test chemistries when this example set was checked: polyimides (Kapton, from
+PMDA and ODA, in both aromatic and kekulized forms) and 1,1-disubstituted
+vinyls (methacrylates such as PMMA, though mono-substituted vinyls such as
+styrene and vinyl acetate work). Both are excluded from the example set.
 
 
 # Installation
 It is assumed you have access to a package and environment manager like `mamba` for this installation
 To acquire, clone this repo and create a compatible virtual environment viz:
 ```sh
-git clone https://github.com/timbernat/NREL_polymers/
-cd NREL_polymers
+git clone https://github.com/jlaw9/2026_polymer_build_workflow.git
+cd 2026_polymer_build_workflow
 mamba env create -f nrel_reqs.yml
 mamba activate nrel-polymers
 ```

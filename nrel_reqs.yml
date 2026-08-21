@@ -4,6 +4,7 @@ channels:
 dependencies:
     - python=3.11
     - pip
+    - setuptools<81 # mbuild still imports pkg_resources, which setuptools removed in 81
 
     # Scientific libraries
     - numpy<=2.0.0
