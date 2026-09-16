@@ -9,6 +9,9 @@ This repository accompanies the publication and ships the workflow itself: the
 source plus a small worked example, without the study-specific monomer
 databases or production projects.
 
+<img src="graphics/Figure-polymer_prep_workflow.png" alt="graphical_abstract">
+
+
 # Quickstart
 
 After installing the environment (below), build three polymer chemistries
