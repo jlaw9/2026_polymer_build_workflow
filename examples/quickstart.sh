@@ -21,19 +21,28 @@ python -m src.reactions
 echo "== 2/5 build parameters (DOP=$DOP) =="
 python -m src.parameters write -aow \
     --DOP "$DOP" \
-    --n-atoms-max "$N_ATOMS_MAX"
+    --n-atoms-max "$N_ATOMS_MAX" \
 
 echo "== 3/5 format the monomer data =="
 # inject canonical and explicit SMILES columns required to specify explicit chemistry 
-python -m src.format_data sequence -mdat "$MDAT" -od examples -pf fmt -aow
+python -m src.format_data sequence -aow \
+    -mdat "$MDAT" \
+    -od examples \
+    -pf fmt
 MDAT_FMT="examples/monomers_example_fmt.csv"
 
 echo "== 4/5 initialize project '$PROJ' with $N_CHEM chemistries =="
 rm -rf "$PROJ" # remove any prior project with the same name
-python -m src.init_signac -mdat "$MDAT_FMT" -num "$N_CHEM" --project-name "$PROJ" -od .
+python -m src.init_signac -od . \
+    --project-name "$PROJ" \
+    -mdat "$MDAT_FMT" \
+    -num "$N_CHEM" \
 
 echo "== 5/5 run local system build =="
-python -m src.project -path "$PROJ" -rxns "$RXNS" run -o everything
+python -m src.project \
+    -path "$PROJ" \
+    -rxns "$RXNS" \
+    run -o everything
 
 echo
 echo "Done. Project status:"
