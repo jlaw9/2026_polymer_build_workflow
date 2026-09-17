@@ -11,6 +11,7 @@ N_CHEM="${1:-3}"
 DOP="${2:-3}"
 PROJ="quickstart_project"
 MDAT="examples/monomers_example.csv"
+RXNS="src/reactions/rxns_polyID.json"
 
 echo "== 1/5 initialize reaction templates =="
 python -m src.reactions
@@ -28,10 +29,10 @@ rm -rf "$PROJ" # remove any prior project with the same name
 python -m src.init_signac -mdat "$MDAT_FMT" -num "$N_CHEM" --project-name "$PROJ" -od .
 
 echo "== 5/5 run local system build =="
-python -m src.project -path "$PROJ" -rxns src/reactions/rxns_polyID.json run -o everything
+python -m src.project -path "$PROJ" -rxns "$RXNS" run -o everything
 
 echo
 echo "Done. Project status:"
-python -m src.project -path "$PROJ" -rxns src/reactions/rxns_polyID.json status
+python -m src.project -path "$PROJ" -rxns "$RXNS" status
 echo
 echo "MD inputs are under $PROJ/workspace/<job-id>/"
