@@ -37,9 +37,10 @@ echo "== 4/5 initialize project '$PROJ' with $N_CHEM chemistries =="
 rm -rf "$PROJ" # remove any prior project with the same name
 python -m src.init_signac -od . \
     --project-name "$PROJ" \
+    --parameters-swept-name "$PARAMS" \
     -mdat "$MDAT_FMT" \
     -num "$N_CHEM" \
-    --parameters-swept-name "$PARAMS"
+    --random
 
 echo "== 5/5 run local system build =="
 python -m src.project \
