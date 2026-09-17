@@ -27,7 +27,8 @@ from . import _parent_dir
 # HARD-CODED PATHS WHERE PARAMETERS SHOULD LIVE
 PARAMS_DIR = _parent_dir / 'parameters'
 PARAMS_DIR.mkdir(exist_ok=True)
-PARAMS_SWEPT_PATH  = PARAMS_DIR / 'parameters_swept.json'
+PARAMS_SWEPT_NAME = "parameters_swept"
+PARAMS_SWEPT_PATH = PARAMS_DIR / f'{PARAMS_SWEPT_NAME}.json'
 
 # DATACLASSES TO GIVE STRUCTURE TO PARAMETER SETS
 @make_jsonifiable(type_serializer=MixtureSpecSerializer)

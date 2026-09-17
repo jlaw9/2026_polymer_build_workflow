@@ -17,9 +17,15 @@ import pandas as pd
 
 from signac import init_project
 
+from polymerist.genutils.fileutils.pathutils import assemble_path
 from polymerist.genutils.iteration import cartesian_grid
 
-from .parameters import SystemParameters, PARAMS_SWEPT_PATH, standardize_params_swept
+from .parameters import (
+    SystemParameters,
+    PARAMS_DIR,
+    PARAMS_SWEPT_NAME,
+    standardize_params_swept,
+)
 from .utils.dataIO import validate_file_path, read_monomer_data
 
 
@@ -51,12 +57,6 @@ def generate_statepoints(args : Namespace) -> None:
         random=args.random
     )
 
-    # determine statepoint values and field names
-    validate_file_path(args.parameters_swept, check_missing=True, check_has_extension=True, valid_extensions=('.json',))
-    with args.parameters_swept.open('r') as file_params_swept:
-        # params_swept = standardize_params_swept(json.load(file_params_swept))
-        params_swept = json.load(file_params_swept) # NOTE: don't want to standardize here, since MixtureSpec is not a JSONSerializable type for statepoints
-    
     ## identify names of statepoint and metadata fields from provided monomer dataset
     fields_not_in_df : set[str] = set(args.parameters_field).difference(monomer_df.columns)
     if any(fields_not_in_df):
@@ -73,7 +73,7 @@ def generate_statepoints(args : Namespace) -> None:
     ## populate data into statepoints
     for _, row in monomer_df.iterrows(): # N.B.: iterating over rows (rather than injecting into Cartesian product) since we DON'T want product along fields bundled within datafile records
         # generate job statepoints and metadata, inject shared state parameters as needed
-        for param_choices in cartesian_grid(params_swept):
+        for param_choices in cartesian_grid(args.parameters_swept):
             job = project.open_job(
                 statepoint={
                     **row.loc[statepoint_fields].to_dict(),
@@ -107,11 +107,18 @@ def main() -> None:
         help='When --number-to-sample is set, dictates whether the subsample should be the first N (default) or a random sample of N',
     )
     parser.add_argument(
-        '-pswept',
-        '--parameters-swept',
+        '-prmdir',
+        '--params-dir',
         type=Path,
-        default=PARAMS_SWEPT_PATH,
-        help='Path to a JSON file containing varying system parameters for project jobs',
+        default=PARAMS_DIR,
+        help='The directory to search for swept parameters files'
+    )
+    parser.add_argument(
+        '-psweptnm',
+        '--parameters-swept-name',
+        type=str,
+        default=PARAMS_SWEPT_NAME,
+        help='Name of a JSON file containing varying system parameters for project jobs',
     )
     parser.add_argument(
         '-pfield',
@@ -136,6 +143,25 @@ def main() -> None:
     )
 
     args = parser.parse_args()
+    
+        # determine statepoint values and field names
+    path_params_swept = assemble_path(
+        args.params_dir,
+        args.parameters_swept_name,
+        extension='.json',
+    )
+    validate_file_path(
+        path_params_swept,
+        check_missing=True,
+        check_has_extension=True,
+        valid_extensions=('.json',),
+    )
+    with path_params_swept.open('r') as file_params_swept:
+        # args.parameters_swept = standardize_params_swept(json.load(file_params_swept))
+        # NOTE: don't want to standardize here, since MixtureSpec
+        # is not a JSONSerializable type for statepoints
+        args.parameters_swept = json.load(file_params_swept) 
+    
     generate_statepoints(args)
 
 if __name__ == '__main__':
