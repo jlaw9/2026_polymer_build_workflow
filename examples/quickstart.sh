@@ -14,6 +14,7 @@ N_ATOMS_MAX="${3:-5000}"
 PROJ="quickstart_project"
 MDAT="examples/monomers_example.csv"
 RXNS="src/reactions/rxns_polyID.json"
+PARAMS="parameters_quickstart"
 
 echo "== 1/5 initialize reaction templates =="
 python -m src.reactions
@@ -22,6 +23,7 @@ echo "== 2/5 build parameters (DOP=$DOP) =="
 python -m src.parameters write -aow \
     --DOP "$DOP" \
     --n-atoms-max "$N_ATOMS_MAX" \
+    -namdat "$PARAMS"
 
 echo "== 3/5 format the monomer data =="
 # inject canonical and explicit SMILES columns required to specify explicit chemistry 
@@ -37,6 +39,7 @@ python -m src.init_signac -od . \
     --project-name "$PROJ" \
     -mdat "$MDAT_FMT" \
     -num "$N_CHEM" \
+    --parameters-swept-name "$PARAMS"
 
 echo "== 5/5 run local system build =="
 python -m src.project \

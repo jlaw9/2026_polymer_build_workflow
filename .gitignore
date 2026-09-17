@@ -60,9 +60,11 @@ tmp.in
 *.out
 *.log
 *.tar.gz
+
 # build projects and workflow outputs
 *_test/
 *_production/
 quickstart_project/
 src/reactions/*.json
+src/parameters/parameters_quickstart.json
 examples/*_fmt.csv
