@@ -96,12 +96,21 @@ class ReactionInfo:
     test_reactant_smiles : Sequence[str]
 
 rxn_inputs : dict[str, ReactionInfo] = {
-    'polyester' : ReactionInfo(
-        reactant_groups=['hydroxyl', 'carboxyl'],
-        byproduct_templates=['water'],
-        bond_derangement={
-            2 : (1, 5),
-            4 : (5, 1),
+    # 'polyester' : ReactionInfo(
+    #     reactant_groups=['hydroxyl', 'carboxyl'],
+    #     byproduct_templates=['water'],
+    #     bond_derangement={
+    #         2 : (1, 5),
+    #         4 : (5, 1),
+    #     },
+    #     test_reactant_smiles=('OCCO', 'OC(=O)c1ccc(cc1)C(=O)O'), # PET,
+    # ),
+    'polyester'  : ReactionInfo(
+        reactant_groups=['hydroxyl', 'ester'],
+        byproduct_templates=['alcohol'],
+        bond_derangement= {
+            2 : (1, 6),
+            5 : (6, 1),
         },
         test_reactant_smiles=('OCCO', 'OC(=O)c1ccc(cc1)C(=O)O'), # PET,
     ),
@@ -134,15 +143,15 @@ rxn_inputs : dict[str, ReactionInfo] = {
         },
         test_reactant_smiles=('Oc1ccc(cc1)C(c2ccc(O)cc2)(C)C', 'ClC(=O)Cl'), # BPA + phosgene
     ),
-    'polycarbonate_nonphosgene'  : ReactionInfo(
-        reactant_groups=['hydroxyl', 'ester'],
-        byproduct_templates=['alcohol'],
-        bond_derangement= {
-            2 : (1, 6),
-            5 : (6, 1),
-        },
-        test_reactant_smiles=('Oc1ccc(cc1)C(c2ccc(O)cc2)(C)C', 'O=C(Oc1ccccc1)Oc2ccccc2'), # BPA + diphenyl carbonate
-    ),
+    # 'polycarbonate_nonphosgene'  : ReactionInfo(
+    #     reactant_groups=['hydroxyl', 'ester'],
+    #     byproduct_templates=['alcohol'],
+    #     bond_derangement= {
+    #         2 : (1, 6),
+    #         5 : (6, 1),
+    #     },
+    #     test_reactant_smiles=('Oc1ccc(cc1)C(c2ccc(O)cc2)(C)C', 'O=C(Oc1ccccc1)Oc2ccccc2'), # BPA + diphenyl carbonate
+    # ),
     'polyurethane_isocyanate'    : ReactionInfo(
         reactant_groups=['hydroxyl', 'isocyanate'],
         byproduct_templates=[],
