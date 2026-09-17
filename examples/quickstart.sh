@@ -1,14 +1,16 @@
 #!/bin/bash
 # End-to-end run of the build workflow on example chemistries.
 #
-#   bash examples/quickstart.sh          # build 3 chemistries as trimers
-#   bash examples/quickstart.sh 5 10     # ...5 chemistries, DOP 10
+#   bash examples/quickstart.sh               # build 3 chemistries as trimers
+#   bash examples/quickstart.sh 5 10          # ...5 chemistries, DOP 10
+#   bash examples/quickstart.sh 5 10 10000    # ...10k atoms per system
 #
 # Expect a few minutes per chemistry: parameterization and packing dominate.
 set -euo pipefail
 
 N_CHEM="${1:-3}"
 DOP="${2:-3}"
+N_ATOMS_MAX="${3:-5000}"
 PROJ="quickstart_project"
 MDAT="examples/monomers_example.csv"
 RXNS="src/reactions/rxns_polyID.json"
@@ -17,7 +19,9 @@ echo "== 1/5 initialize reaction templates =="
 python -m src.reactions
 
 echo "== 2/5 build parameters (DOP=$DOP) =="
-python -m src.parameters write -aow --DOP "$DOP"
+python -m src.parameters write -aow \
+    --DOP "$DOP" \
+    --n-atoms-max "$N_ATOMS_MAX"
 
 echo "== 3/5 format the monomer data =="
 # inject canonical and explicit SMILES columns required to specify explicit chemistry 
